@@ -1,0 +1,12 @@
+[project]
+name = "24h-testers"
+version = "0.1.0"
+description = "Autonomous reliability loop tooling (language-agnostic artifacts)"
+readme = "README.md"
+dependencies = []
+
+[project.optional-dependencies]
+dev = []
+
+[tool.setuptools]
+packages = []

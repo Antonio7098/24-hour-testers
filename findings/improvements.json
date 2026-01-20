@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "metadata": {
+    "roadmap_entry_id": "{ENTRY_ID}",
+    "roadmap_entry_title": "{ENTRY_TITLE}",
+    "run_id": "{RUN_ID}",
+    "agent_model": "{MODEL}",
+    "mission_brief_version": "{MISSION_BRIEF_VERSION}",
+    "description": "Enhancement ideas, polish work, and roadmap suggestions."
+  },
+  "items": []
+}

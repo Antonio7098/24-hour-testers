@@ -1,0 +1,20 @@
+{
+  "os": "{Windows|macOS|Linux}",
+  "cpu": "{arch / cores}",
+  "memory_gb": 32,
+  "python_version": "{if applicable}",
+
+  "dependencies": {
+    "agent_runtime": "{version or commit}",
+    "tooling_stack": "{e.g., node@22}",
+    "test_framework": "{pytest|vitest|none}",
+    "other": "{list notable libs or drivers}"
+  },
+
+  "test_environment": {
+    "backend": "{in-process|remote|container}",
+    "isolation": "{per-test|per-suite|shared}",
+    "logging_level": "{INFO|DEBUG|WARN}",
+    "notes": "Document any simulators, feature flags, or sandboxes required for this run"
+  }
+}

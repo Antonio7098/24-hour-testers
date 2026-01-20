@@ -1,0 +1,134 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.env
+.secrets
+*.secrets
+credentials.json
+*.key
+*.pem
+*.crt
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+.#*
+.#*
+
+# Editor and IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.sublime-*
+.project
+.classpath
+.settings/
+.vs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+ENV/
+env/
+.venv/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.lock-wscript
+dist/
+build/
+.next/
+out/
+.cache/
+
+# General
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+*.bak
+*.backup
+*.orig
+*.rej
+*.patch
+*.diff
+
+# Runs and output
+runs/*
+!runs/.gitkeep
+output/
+*.out
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Backup files
+*~
+.*.swp
+*.bak
+*.backup
+*.orig
+
+# Coverage and testing
+coverage/
+htmlcov/
+.pytest_cache/
+.coverage
+*.coverag
+
+# Docker
+.docker/
+docker-compose.override.yml
+.dockerignore
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+*.plan
+*.plan.*
+
+# Misc
+*.egg-info/
+*.manifest
+*.spec
