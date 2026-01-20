@@ -10,7 +10,7 @@
 
 1. Reads the packet + checklist context.
 2. Picks unfinished checklist rows.
-3. Spawns autonomous OpenCode agents to research, simulate, build, and test.
+3. Spawns autonomous OpenCode or Claude Code agents to research, simulate, build, and test.
 4. Writes structured findings and reports.
 5. Synthesizes fresh backlog when existing work is exhausted (infinite mode).
 

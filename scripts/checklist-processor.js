@@ -165,6 +165,13 @@ let dryRun = false;
 let resume = false;
 let mode = MODE_FINITE;
 
+function setChecklistFilePath(filePath) {
+  if (typeof filePath !== "string" || !filePath.trim()) {
+    throw new Error("Checklist file path must be a non-empty string");
+  }
+  CHECKLIST_FILE = filePath;
+}
+
 function applyCliArgs(args) {
   const argv = Array.isArray(args) ? args : [];
 
@@ -773,4 +780,5 @@ module.exports = {
   assignAgentConfigFromEnv,
   resetAgentConfig,
   setAgentConfig,
+  setChecklistFilePath,
 };
