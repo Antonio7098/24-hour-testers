@@ -158,7 +158,7 @@ Finite mode still stops when every row is ✅; infinite mode keeps the pipeline 
 | Field | Description |
 |-------|-------------|
 | `sut_name` / `sut_version` | Human-readable identifier + commit/tag under test. |
-| `access.instructions` | Plain-language steps for bootstrapping connectivity (e.g., SSH jump host, tunnel commands, VPN). |
+| `access.instructions` | Plain-language steps for bootstrapping connectivity (e.g., SSH jump host, tunnel commands, VPN, package installation). |
 | `access.credentials_key` | Name of the secret (ENV or vault path) that stores auth tokens. |
 | `datasets` | Paths or URLs for happy-path, adversarial, scale, and compliance datasets. |
 | `environments` | Targets (dev/staging/prod), including base URLs and feature flags. |
