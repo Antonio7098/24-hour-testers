@@ -361,7 +361,7 @@ function parseChecklist() {
 
   for (const line of lines) {
     // Track tier and section
-    if (line.startsWith("## Tier ") || line.trim() === "## Infinite Backlog") {
+    if (line.startsWith("## Tier ")) {
       currentTier = line.replace("## ", "").trim();
       currentSection = "";
       continue;

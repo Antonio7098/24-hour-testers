@@ -97,7 +97,7 @@ Instead of separate JSON ledgers, the Final Report is the source of truth.
 ### Tier Folders
 Derived from checklist headers (sanitized):
 - `## Tier 1: Research & Compliance` -> `tier_1_research_compliance`
-- `## Infinite Backlog` -> `infinite_backlog`
+- `## Tier 2: Security Testing` -> `tier_2_security_testing`
 
 ### Run Folders
 Matches the Checklist ID:

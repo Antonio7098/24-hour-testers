@@ -110,9 +110,9 @@ Finite mode still stops when every row is ✅; infinite mode keeps the pipeline 
 ```
 24h-testers/
 ├── agent-resources/
-│   ├── prompts/                  # System prompts for agents (e.g. infinite backlog, tier reports)
+│   ├── prompts/                  # System prompts for agents (e.g. tier reports)
 │   └── templates/                # Document templates (e.g. Final Report)
-├── SEU-PACKET.md              # SUT packet / dossier
+├── SUT-PACKET.md               # SUT packet / dossier
 ├── SUT-CHECKLIST.md          # Canonical backlog
 ├── scripts/                      # Automation utilities (e.g., checklist processor)
 ├── tests/                        # Harness + fixtures reused across runs
