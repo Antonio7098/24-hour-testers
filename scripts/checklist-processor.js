@@ -15,8 +15,6 @@ const { randomUUID } = require("crypto");
 const VERSION = "1.1.0";
 
 const repoRoot = resolve(__dirname, "..");
-console.log("DEBUG: __dirname =", __dirname);
-console.log("DEBUG: repoRoot =", repoRoot);
 
 function resolveRepoPath(targetPath) {
   if (!targetPath) return null;
