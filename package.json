@@ -1,0 +1,29 @@
+{
+  "name": "24h-testers",
+  "version": "1.0.0",
+  "description": "> **Mission**: Keep an autonomous finding loop running. Describe the system under test (SUT), hand the loop a checklist, and let agents execute forever with zero manual babysitting.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node tests/checklist-processor/checklist-parsing.test.js && node tests/checklist-processor/formatting.test.js && node tests/checklist-processor/runtime-config.test.js",
+    "cli": "node scripts/24h-cli.js",
+    "start": "node scripts/24h-cli.js start",
+    "status": "node scripts/24h-cli.js status",
+    "dashboard": "node scripts/24h-cli.js dashboard",
+    "clean:dry": "node scripts/24h-cli.js clean",
+    "clean": "node scripts/24h-cli.js clean --apply"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Antonio7098/24-hour-testers.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Antonio7098/24-hour-testers/issues"
+  },
+  "homepage": "https://github.com/Antonio7098/24-hour-testers#readme"
+}
