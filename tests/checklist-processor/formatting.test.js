@@ -13,7 +13,7 @@ const normalize = text => text.replace(/\r\n/g, '\n');
 test('ensureInfiniteBacklogSection adds the missing section once', () => {
   const base = '# Checklist\nIntro copy';
   const firstPass = ensureInfiniteBacklogSection(base);
-  assert.match(firstPass, /## Infinite Backlog/);
+  assert.match(firstPass, /## Tier 4: Reliability & Backlog Expansion/);
   assert.match(firstPass, /\| ID \| Target \| Priority \| Risk \| Status \|/);
 
   const secondPass = ensureInfiniteBacklogSection(firstPass);
@@ -66,11 +66,13 @@ test('coerceGeneratedItems applies safe defaults and preserves provided fields',
     priority: 'P0',
     risk: 'Severe',
     status: '🚧 In Progress',
+    tier: 'Tier 4: Reliability & Backlog Expansion',
   });
   assert.equal(coerced[1].target, 'Fallback scenario');
   assert.equal(coerced[1].priority, 'P2');
   assert.equal(coerced[1].risk, 'Moderate');
   assert.equal(coerced[1].status, '☐ Not Started');
+  assert.equal(coerced[1].tier, 'Tier 4: Reliability & Backlog Expansion');
   assert.match(coerced[1].id, /^INF-\d+-2$/);
   assert.ok(parseInt(coerced[1].id.split('-')[1], 10) >= now);
 });

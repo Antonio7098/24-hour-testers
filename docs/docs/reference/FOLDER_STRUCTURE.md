@@ -1,4 +1,4 @@
-# 24h Testers Folder Structure
+# the the system Stress-Testing Folder Structure
 
 > **Purpose**: Standardized folder structure for each agent run targeting a roadmap entry.
 
@@ -127,15 +127,15 @@ Add to `.gitignore`:
 
 ```gitignore
 # Large generated files
-runs/*/results/logs/*.log
-runs/*/mocks/data/scale/*.json
+production-testers/runs/*/results/logs/*.log
+production-testers/runs/*/mocks/data/scale/*.json
 
 # Temporary files
-runs/*/.pytest_cache/
-runs/*/__pycache__/
+production-testers/runs/*/.pytest_cache/
+production-testers/runs/*/__pycache__/
 
 # Sensitive data (if any)
-runs/*/mocks/data/**/sensitive_*
+production-testers/runs/*/mocks/data/**/sensitive_*
 ```
 
 ---

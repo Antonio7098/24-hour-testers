@@ -1,28 +1,24 @@
-# Mission Brief: FinCore Banking API
+# Mission Brief: {SUT_NAME}
 
 ## System Under Test (SUT)
-**FinCore** is a mock banking backend designed to process transactions and manage user accounts. It is critical infrastructure requiring high reliability, security, and strict compliance with financial regulations.
+**{SUT_NAME}** is a {DESCRIPTION_OF_SYSTEM}. It is critical infrastructure requiring {REQUIREMENTS}.
 
 ### Architecture
-- **Runtime**: Node.js / Express
-- **Database**: In-memory (mocked for this environment)
-- **Authentication**: Header-based `X-Fin-Token`
+- **Runtime**: {RUNTIME_STACK}
+- **Database**: {DATABASE_INFO}
+- **Authentication**: {AUTH_MECHANISM}
 - **Documentation**: 
-  - [API Spec](sut-server/docs/api-spec.md)
-  - [Compliance Rules](sut-server/docs/compliance-rules.md)
+  - [API Spec]({PATH_TO_API_SPEC})
+  - [Compliance Rules]({PATH_TO_COMPLIANCE_RULES})
 
 ### Key Interfaces
 - `GET /health` - System status
-- `GET /accounts` - List authenticated user's accounts
-- `GET /accounts/:id/transactions` - Transaction history
-- `POST /transfer` - Fund transfers (requires Idempotency-Key)
-- `GET /admin/debug` - Internal diagnostics
+- `{METHOD} {ENDPOINT}` - {DESCRIPTION}
 
 ### Known Risks & Focus Areas
-1.  **Authorization (IDOR)**: Ensure users cannot access accounts they do not own.
-2.  **Transaction Integrity**: Double-spending, negative transfers, and idempotency key enforcement.
-3.  **Data Leakage**: Admin endpoints or error messages leaking PII or internal state.
-4.  **Input Validation**: Injection attacks (XSS, SQLi-style) in fields like 'description'.
+1.  **{RISK_AREA_1}**: {DESCRIPTION}
+2.  **{RISK_AREA_2}**: {DESCRIPTION}
+3.  **{RISK_AREA_3}**: {DESCRIPTION}
 
 ## Automation Objectives
 - **Phase 1 (Research)**: Analyze API docs and compliance rules to identify gap between spec and implementation.
@@ -31,5 +27,5 @@
 - **Phase 4 (Infinite)**: Continuously explore edge cases in transaction logic (e.g. concurrent transfers).
 
 ## Access
-- **Base URL**: `http://localhost:3000`
-- **Test Token**: `banker-secret`
+- **Base URL**: `{BASE_URL}`
+- **Test Token**: `{TEST_TOKEN}`

@@ -1,0 +1,24 @@
+{
+  "sut_name": "Example SUT",
+  "sut_version": "1.0.0",
+  "access": {
+    "instructions": "Describe how to access the SUT here (e.g. 'SSH into jump host...', 'Connect via VPN...'), 'Install pip package ...'",
+    "credentials_key": "SUT_AUTH_TOKEN"
+  },
+  "datasets": {
+    "happy_path": "./data/happy_path.json",
+    "adversarial": "./data/adversarial.json"
+  },
+  "environments": {
+    "target": "local",
+    "base_url": "http://localhost:3000"
+  },
+  "success_criteria": {
+    "max_latency_ms": 500,
+    "min_availability_percent": 99.9
+  },
+  "infinite_mode": {
+    "batch_size": 5,
+    "max_depth": 10
+  }
+}

@@ -14,18 +14,18 @@ const { repoPath, writeTempFile } = require('../helpers/test-utils');
 
 const DEFAULT_CHECKLIST = repoPath('mission-checklist.md');
 
-function withChecklistFile(markdown, fn) {
+async function withChecklistFile(markdown, fn) {
   const { filePath } = writeTempFile(markdown, 'checklist.md');
   const previous = DEFAULT_CHECKLIST;
   setChecklistFilePath(filePath);
   try {
-    return fn(filePath);
+    return await fn(filePath);
   } finally {
     setChecklistFilePath(previous);
   }
 }
 
-test('parseChecklist captures tiers, sections, and columns from markdown tables', () => {
+test('parseChecklist captures tiers, sections, and columns from markdown tables', async () => {
   const markdown = `## Tier 9 · Experimental
 
 | ID | Target | Priority | Risk | Status |
@@ -38,7 +38,7 @@ test('parseChecklist captures tiers, sections, and columns from markdown tables'
 | EXP-002 | Section row | P1 | High | ✅ Completed |
 `;
 
-  withChecklistFile(markdown, () => {
+  await withChecklistFile(markdown, () => {
     const items = parseChecklist();
     assert.equal(items.length, 2);
     assert.deepEqual(items[0], {
@@ -54,7 +54,7 @@ test('parseChecklist captures tiers, sections, and columns from markdown tables'
   });
 });
 
-test('getRemainingChecklistItems filters out ✅ rows', () => {
+test('getRemainingChecklistItems filters out ✅ rows', async () => {
   const markdown = `## Tier 1
 
 | ID | Target | Priority | Risk | Status |
@@ -63,7 +63,7 @@ test('getRemainingChecklistItems filters out ✅ rows', () => {
 | CORE-002 | Target | P1 | High | ☐ Not Started |
 `;
 
-  withChecklistFile(markdown, () => {
+  await withChecklistFile(markdown, () => {
     const items = parseChecklist();
     const remaining = getRemainingChecklistItems(items);
     assert.equal(remaining.length, 1);
@@ -71,7 +71,7 @@ test('getRemainingChecklistItems filters out ✅ rows', () => {
   });
 });
 
-test('appendRowsToChecklist inserts new rows after the tier table, preserving existing content', () => {
+test('appendRowsToChecklist inserts new rows after the tier table, preserving existing content', async () => {
   const markdown = `## Tier 3 · Deployment
 
 | ID | Target | Priority | Risk | Status |
@@ -79,8 +79,8 @@ test('appendRowsToChecklist inserts new rows after the tier table, preserving ex
 | INFRA-001 | Baseline | P1 | High | ☐ Not Started |
 `;
 
-  withChecklistFile(markdown, filePath => {
-    appendRowsToChecklist([
+  await withChecklistFile(markdown, async filePath => {
+    await appendRowsToChecklist([
       {
         id: 'INFRA-010',
         target: 'Edge failover drill',
