@@ -46,6 +46,21 @@ mkdir -p "${RUN_DIR}"/{research,mocks/data/{happy_path,edge_cases,adversarial,sc
 
 ### 3. Launch the Automated Loop
 
+#### Option A – Unified CLI (recommended)
+
+```bash
+npm run start -- --batch-size 5 --mode infinite \
+  --checklist mission-checklist.md --mission-brief mission-brief.md
+
+# Helpers
+npm run status        # checklist-processor --status
+npm run dashboard     # Aggregated progress view
+npm run clean:dry     # Preview cleanup actions
+npm run clean         # Archive runs + reset checklist/state
+```
+
+#### Option B – Direct script invocation
+
 ```
 # Windows (PowerShell)
 pwsh scripts/run-checklist.ps1 --batch-size 5 --mode infinite \
@@ -55,13 +70,25 @@ pwsh scripts/run-checklist.ps1 --batch-size 5 --mode infinite \
 bash scripts/run-checklist.sh --batch-size 5 --mode infinite \
   --checklist mission-checklist.md --mission-brief mission-brief.md
 
-# Direct Node invocation (either platform)
+# Direct Node invocation
 node scripts/checklist-processor.js \
   --batch-size 5 \
   --mode infinite \
   --checklist mission-checklist.md \
   --mission-brief mission-brief.md
 ```
+
+### Unified CLI capabilities
+
+| Command | Description |
+|---------|-------------|
+| `npm run start -- [flags]` | Pass-through runner for `checklist-processor.js` with consistent env setup. |
+| `npm run status` | Calls `--status` and prints agent/session progress. |
+| `npm run dashboard` | Renders tier-level breakdowns plus active-session metadata. |
+| `npm run clean:dry` | Shows what would be archived/reset without touching files. |
+| `npm run clean` | Archives `runs/` + `tier-reports/`, resets checklist rows to `☐ Not Started`, and wipes `.checklist-processor/` state. |
+
+The CLI lives in `scripts/24h-cli.js` so the same workflow works on Windows, macOS, and Linux without PowerShell/Bash conditionals.
 
 ### Runtime + Model Selection
 

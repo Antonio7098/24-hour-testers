@@ -284,6 +284,10 @@ Feature:        {N} ██
 
 **Recommendation**: {Recommendation}
 
+**Evidence**:
+- [Log Excerpt](results/logs/run.log)
+- [Screenshot](results/screenshots/evidence.png)
+
 ---
 
 {Repeat for each critical/high finding}
@@ -292,12 +296,17 @@ Feature:        {N} ██
 
 ### 5.4 Medium & Low Findings
 
-| ID | Type | Title | Component |
-|----|------|-------|-----------|
-| {ID} | {Type} | {Title} | {Component} |
-| ... | ... | ... | ... |
+#### {FINDING_ID}: {Title}
 
-*See `findings.json` for full details.*
+**Type**: {type} | **Severity**: {severity} | **Component**: {component}
+
+{Description}
+
+**Recommendation**: {Recommendation}
+
+---
+
+{Repeat for medium/low findings}
 
 ---
 

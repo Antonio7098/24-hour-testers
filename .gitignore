@@ -66,6 +66,12 @@ env/
 
 # Node.js
 node_modules/
+runs/
+.checklist-processor/
+
+# Windows device placeholder files
+nul
+**/nul
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

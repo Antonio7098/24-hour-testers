@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "id": "INF-010",
+      "target": "Test transfer timeout interruption recovery: Initiate large transfer, then abruptly terminate client connection mid-processing, verify system does not leave funds in limbo and properly rolls back transaction with consistent error response on retry",
+      "priority": "P1",
+      "risk": "High",
+      "status": "☐ Not Started"
+    }
+  ]
+}

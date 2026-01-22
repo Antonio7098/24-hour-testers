@@ -31,7 +31,14 @@ SUT targets over placeholders.
 Respond ONLY with JSON using the shape:
 {
   "items": [
-    {"id": "INF-123", "target": "...", "priority": "P1", "risk": "High", "status": "☐ Not Started"}
+    {
+      "id": "INF-123",
+      "target": "...",
+      "priority": "P1",
+      "risk": "High",
+      "status": "☐ Not Started",
+      "tier": "Tier 4: Reliability & Backlog Expansion"
+    }
   ]
 }
 ```
@@ -44,4 +51,5 @@ Respond ONLY with JSON using the shape:
 2. Priorities must stay within the existing P0–P3 scale unless the checklist defines another.
 3. Use risks like Catastrophic/Severe/High/Moderate/Low to match current phrasing.
 4. Always default status to `☐ Not Started`.
-5. Focus on expansion work that can be executed independently in the next batch.
+5. **Tier Assignment**: Assign each item to the most relevant existing tier found in the checklist. If the item represents a completely new category of testing not covered by existing tiers, you may define a new Tier name (e.g., "Tier 5: Performance").
+6. Focus on expansion work that can be executed independently in the next batch.

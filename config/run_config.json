@@ -1,61 +1,23 @@
 {
-  "roadmap_entry_id": "{ENTRY_ID}",
-  "roadmap_entry_title": "{ENTRY_TITLE}",
-  "priority": "P{1-3}",
-  "risk_class": "{Low|Moderate|High|Critical}",
-  "industry_vertical": "{VERTICAL or domain}",
-  "deployment_mode": "{dev|staging|prod|air-gapped}",
-
-  "run_id": "run-{YYYY-MM-DD}-{SEQ}",
-  "started_at": "{ISO8601_TIMESTAMP}",
-
-  "agent_model": "{model slug}",
-  "agent_runtime": "{opencode|claude-code|custom}",
-  "orchestration_runtime_version": "{tooling version / build hash}",
-
+  "sut_name": "Playground SUT",
+  "sut_version": "1.0.0",
   "access": {
-    "credentials_key": "{ENV_VAR_OR_SECRET}",
-    "network_profile": "{vpn|tunnel|direct}",
-    "allow_actuation": false
+    "base_url": "http://localhost:3000",
+    "instructions": "Ensure sut-server is running on port 3000.",
+    "credentials_key": "SUT_AUTH_TOKEN"
   },
-
-  "datasets": {
-    "happy_path": "runs/{ENTRY}/datasets/happy-path.jsonl",
-    "edge_cases": "runs/{ENTRY}/datasets/edge-cases.jsonl",
-    "adversarial": "runs/{ENTRY}/datasets/adversarial.jsonl",
-    "scale": "runs/{ENTRY}/datasets/scale.jsonl"
-  },
-
   "environments": {
-    "dev": {
-      "base_url": "https://dev.example.com",
-      "feature_flags": ["enable_mock_llm"],
-      "rate_limit": "60 rps"
-    },
-    "staging": {
-      "base_url": "https://staging.example.com",
-      "feature_flags": [],
-      "rate_limit": "30 rps"
+    "local": {
+      "base_url": "http://localhost:3000",
+      "flags": {}
     }
   },
-
-  "test_parameters": {
-    "baseline_iterations": 50,
-    "stress_concurrency": 25,
-    "chaos_iterations": 100,
-    "adversarial_tests": true,
-    "schema_drift_tests": false,
-    "silent_failure_detection": true,
-    "custom": {
-      "notes": "Describe any bespoke knobs here"
-    }
+  "datasets": {
+    "happy_path": "mocks/data/happy_path",
+    "adversarial": "mocks/data/adversarial"
   },
-
   "success_criteria": {
-    "latency_p95_ms": 250,
-    "error_budget_percent": 0.5,
-    "silent_failure_rate_percent": 0,
-    "dx_friction_score_max": 2,
-    "other": "Document any program-specific gates"
+    "max_critical_bugs": 0,
+    "min_uptime_percent": 95
   }
 }

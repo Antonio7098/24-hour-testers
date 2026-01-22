@@ -137,65 +137,31 @@ Log documentation gaps separately so they can be actioned.
 
 ## Phase 6 – Reporting & Findings
 
-All findings live in the type-specific ledgers under `findings/` (bugs/strengths/improvements). Use `scripts/add_finding.py` to append entries.
+All artifacts must be saved within your dedicated run directory: `{{RUN_DIR}}`.
 
-### Finding Schema
+### Final Report
+Create a comprehensive report at `{{RUN_DIR}}/{{ENTRY_ID}}-FINAL-REPORT.md`. This file should include:
 
-```
-{
-  "id": "FND-###",
-  "entry_id": "{{ENTRY_ID}}",
-  "type": "bug|security|performance|reliability|silent_failure|dx|improvement|documentation|feature_request|strength",
-  "severity": "critical|high|medium|low|info",
-  "title": "...",
-  "description": "What happened?",
-  "component": "Subsystem or stage",
-  "reproduction": "Step-by-step",
-  "expected_behavior": "What should happen",
-  "actual_behavior": "What happened",
-  "evidence": ["log excerpts", "metrics", "screenshots"],
-  "impact": "Business/user impact",
-  "recommendation": "Fix or mitigation",
-  "metadata": {"persona": "...", "run": "run-YYYY-MM-DD-NN"}
-}
-```
+1.  **Executive Summary** - High-level result (PASS/FAIL/WARNING).
+2.  **Findings** - A structured list of all bugs, security vulnerabilities, or DX issues found.
+3.  **Evidence** - Links to logs, screenshots, or reproduction scripts (also stored in `{{RUN_DIR}}`).
+4.  **Research** - Summary of research findings (or link to `{{RUN_DIR}}/research/summary.md`).
 
-### add_finding.py Usage
+**Do NOT use `add_finding.py` or any global JSON ledgers.** Your report is the source of truth.
 
-```bash
-python scripts/add_finding.py \
-  --type bug \
-  --entry-id "{{ENTRY_ID}}" \
-  --agent "claude-3.5-sonnet" \
-  --payload '{"title": "...", "severity": "high", ...}'
-```
+### Artifact Organization
+Structure your run directory as follows:
 
-The script will:
-
-1. Load/create `findings.json` in repo root (or use `--output` to target a run directory).
-2. Generate sequential IDs (`FND-001`, `FND-002`, ...).
-3. Stamp `created_at`, `agent`, and `entry_id` metadata.
-
-> Do **not** edit `findings.json` manually. Always go through the script so formatting stays consistent.
-
-### Other Artifacts
-
-1. `research/` – sources, quotes, hypotheses.
-2. `mocks/` – input data, service simulators.
-3. `pipelines/` – harness code + docs.
-4. `results/` – logs, metrics, traces, checkpoints.
-5. `FINAL_REPORT.md` – human-readable wrap-up per template.
+- `{{RUN_DIR}}/research/` – Sources, hypotheses, context.
+- `{{RUN_DIR}}/mocks/` – Simulators and data.
+- `{{RUN_DIR}}/tests/` – Test scripts and harnesses.
+- `{{RUN_DIR}}/results/` – Raw logs, output files, evidence.
 
 ---
 
 ## Phase 7 – Recommendations
 
-Provide two sets of recommendations:
-
-1. **Framework/SUT** – APIs, defaults, features, patterns, tooling.
-2. **Industry Persona** – Compliance gaps, workflow templates, integrations, SLO targets.
-
-Tie every recommendation to evidence captured in findings or logs.
+Include recommendations directly in your `{{ENTRY_ID}}-FINAL-REPORT.md`.
 
 ---
 
@@ -203,29 +169,23 @@ Tie every recommendation to evidence captured in findings or logs.
 
 **Do**
 
-1. Stay inside the repo (vendor dependencies locally with `pip install --target vendor <pkg>` if needed).
-2. Prefer existing helpers in `components/` before writing custom glue.
-3. Version-control every generated artifact (code, data, docs).
-4. Keep runs deterministic when possible (fixed seeds, noted randomness).
+1.  Stay inside `{{RUN_DIR}}` for all write operations.
+2.  Version-control every generated artifact.
+3.  Keep runs deterministic when possible.
 
 **Don’t**
 
-1. Skip research or roleplay context.
-2. Trust success logs without verifying downstream state.
-3. Let logs go uncaptured—every run must have archived telemetry.
-4. Reuse credentials or secrets outside approved mocks.
+1.  Write files outside of `{{RUN_DIR}}`.
+2.  Skip research or roleplay context.
+3.  Let logs go uncaptured.
 
 ---
 
 ## Success Checklist
 
-- [ ] Research summary with hypotheses and risks.
-- [ ] Mocks + datasets representing happy/edge/adversarial/scale cases.
-- [ ] Full pipeline suite (baseline, stress, chaos, adversarial, recovery).
-- [ ] Silent failure probes with evidence.
-- [ ] Complete telemetry packs (logs, metrics, traces) per run.
-- [ ] DX evaluation + documentation feedback.
-- [ ] Findings captured via `add_finding.py`.
-- [ ] Final report + recommendations delivered.
+- [ ] Research summary created in `{{RUN_DIR}}/research/`.
+- [ ] Test environment (mocks/harness) set up in `{{RUN_DIR}}/mocks/` or `{{RUN_DIR}}/tests/`.
+- [ ] Tests executed and logs captured in `{{RUN_DIR}}/results/`.
+- [ ] `{{ENTRY_ID}}-FINAL-REPORT.md` created with all findings and recommendations.
 
-When every box is checked, post the final summary and archive the run artifacts for review.
+When every box is checked, output the completion signal: `ITEM_COMPLETE`.

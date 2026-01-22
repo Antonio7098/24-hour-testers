@@ -8,22 +8,37 @@
 
 
 const { spawn } = require("child_process");
-const { readFileSync, writeFileSync, existsSync, mkdirSync, openSync, closeSync, readdirSync } = require("fs");
-const { join } = require("path");
+const { readFileSync, writeFileSync, existsSync, mkdirSync, openSync, closeSync, readdirSync, renameSync } = require("fs");
+const { join, resolve, isAbsolute, relative, dirname } = require("path");
 const { randomUUID } = require("crypto");
 
 const VERSION = "1.1.0";
 
+const repoRoot = resolve(__dirname, "..");
+console.log("DEBUG: __dirname =", __dirname);
+console.log("DEBUG: repoRoot =", repoRoot);
+
+function resolveRepoPath(targetPath) {
+  if (!targetPath) return null;
+  return isAbsolute(targetPath) ? targetPath : resolve(repoRoot, targetPath);
+}
+
+function formatPathForPrompt(targetPath) {
+  if (!targetPath) return "";
+  const relativePath = relative(repoRoot, targetPath);
+  return relativePath && !relativePath.startsWith("..") ? relativePath : targetPath;
+}
+
 // Configuration
-let CHECKLIST_FILE = "mission-checklist.md";
-const DEFAULT_MISSION_BRIEF_FILE = "mission-brief.md";
-const FALLBACK_MISSION_BRIEF_FILE = "README.md";
-const AGENT_PROMPT_FILE = "docs/prompts/AGENT_SYSTEM_PROMPT.md";
-const TIER_REPORT_PROMPT_FILE = "docs/prompts/TIER_REPORT_PROMPT.md";
-const TIER_REPORTS_DIR = "tier-reports";
+let CHECKLIST_FILE = resolveRepoPath("mission-checklist.md");
+const DEFAULT_MISSION_BRIEF_FILE = resolveRepoPath("mission-brief.md");
+const FALLBACK_MISSION_BRIEF_FILE = resolveRepoPath("README.md");
+const AGENT_PROMPT_FILE = resolveRepoPath("docs/prompts/AGENT_SYSTEM_PROMPT.md");
+const TIER_REPORT_PROMPT_FILE = resolveRepoPath("docs/prompts/TIER_REPORT_PROMPT.md");
+const TIER_REPORTS_DIR = resolveRepoPath("tier-reports");
 const TIER_METADATA_FILE = join(TIER_REPORTS_DIR, "index.json");
-const RUNS_DIR = "runs";
-const FINAL_REPORT_FILENAME = "FINAL_REPORT.md";
+const RUNS_DIR = resolveRepoPath("runs");
+const FINAL_REPORT_FILENAME = resolveRepoPath("FINAL_REPORT.md");
 const BATCH_SIZE = 5;
 
 const MAX_ITERATIONS_PER_ITEM = 20;
@@ -155,7 +170,7 @@ if (existsSync(AGENT_PROMPT_FILE)) {
 }
 
 // State management paths (needed before we parse CLI flags that inspect state)
-const stateDir = join(process.cwd(), ".checklist-processor");
+const stateDir = join(repoRoot, ".checklist-processor");
 const statePath = join(stateDir, "state.json");
 const checkpointPath = join(stateDir, "checkpoint.json");
 
@@ -169,7 +184,7 @@ function setChecklistFilePath(filePath) {
   if (typeof filePath !== "string" || !filePath.trim()) {
     throw new Error("Checklist file path must be a non-empty string");
   }
-  CHECKLIST_FILE = filePath;
+  CHECKLIST_FILE = resolveRepoPath(filePath.trim());
 }
 
 function applyCliArgs(args) {
@@ -247,14 +262,14 @@ Examples:
         console.error("Error: --checklist requires a file path");
         process.exit(1);
       }
-      CHECKLIST_FILE = val;
+      CHECKLIST_FILE = resolveRepoPath(val);
     } else if (arg === "--mission-brief") {
       const val = argv[++i];
       if (!val) {
         console.error("Error: --mission-brief requires a file path");
         process.exit(1);
       }
-      MISSION_BRIEF_FILE = val;
+      MISSION_BRIEF_FILE = resolveRepoPath(val);
       missionBriefCache = null;
     } else if (arg === "--runtime" || arg === "--agent-runtime") {
       const val = argv[++i];
@@ -348,8 +363,8 @@ function parseChecklist() {
 
   for (const line of lines) {
     // Track tier and section
-    if (line.startsWith("## Tier ")) {
-      currentTier = line.replace("## ", "");
+    if (line.startsWith("## Tier ") || line.trim() === "## Infinite Backlog") {
+      currentTier = line.replace("## ", "").trim();
       currentSection = "";
       continue;
     }
@@ -475,6 +490,153 @@ async function extendChecklistIfNeeded(missionBrief) {
   return true;
 }
 
+async function generateTierReportsIfNeeded(items, missionBrief) {
+  // Use prefix map to group items correctly
+  const prefixTierMap = buildPrefixTierMap(items);
+  
+  // Group by sanitized tier name for reporting
+  const grouped = items.reduce((acc, item) => {
+    const heading = resolveTierHeading(item, prefixTierMap);
+    if (heading) {
+        const tierName = heading.replace(/^##\s*/, "");
+        acc[tierName] = acc[tierName] || [];
+        acc[tierName].push(item);
+    }
+    return acc;
+  }, {});
+
+  for (const [tierName, tierItems] of Object.entries(grouped)) {
+    const isComplete = tierItems.every(item => (item.status || "").includes("✅"));
+    if (!isComplete) continue;
+
+    const sanitizedTierName = getSanitizedTierName(tierName);
+    const tierDir = join(RUNS_DIR, sanitizedTierName);
+    
+    // Ensure tier directory exists
+    if (!existsSync(tierDir)) {
+        mkdirSync(tierDir, { recursive: true });
+    }
+
+    const reportPath = join(tierDir, `${sanitizedTierName}-FINAL-REPORT.md`);
+
+    if (existsSync(reportPath)) continue;
+
+    console.log(`Tier "${tierName}" is complete. Generating aggregated report...`);
+
+    // Collect individual run reports
+    let accumulatedReports = "";
+    for (const item of tierItems) {
+        const itemRunDir = getRunDir(item, prefixTierMap);
+        const itemReportPath = join(itemRunDir, `${item.id}-FINAL-REPORT.md`);
+        
+        accumulatedReports += `\n\n### Report for ${item.id}: ${item.target}\n`;
+        if (existsSync(itemReportPath)) {
+            accumulatedReports += readFileSync(itemReportPath, "utf-8");
+        } else {
+            accumulatedReports += "*No final report found for this item.*";
+        }
+        accumulatedReports += "\n\n---";
+    }
+
+    // Prepare prompt
+    if (!tierReportPromptTemplate) {
+        // Fallback if no template
+        writeFileSync(reportPath, `# ${tierName} - Tier Report\n\n${accumulatedReports}`);
+        console.log(`Generated simple tier report: ${reportPath}`);
+        continue;
+    }
+
+    const checklistRows = tierItems.map(formatChecklistRow).join("\n");
+
+    const prompt = tierReportPromptTemplate
+      .replace("{{TIER_NAME}}", tierName)
+      .replace("{{CHECKLIST_ROWS}}", checklistRows)
+      .replace("{{MISSION_BRIEF}}", missionBrief || "")
+      .replace("{{FINAL_REPORT_DIGEST}}", accumulatedReports);
+
+    try {
+      const rawOutput = await runAgentWithPrompt(prompt, `tier-report-${sanitizedTierName}`);
+      const cleanedOutput = cleanAgentOutput(rawOutput);
+      writeFileSync(reportPath, cleanedOutput);
+      console.log(`Generated aggregated tier report: ${reportPath}`);
+    } catch (err) {
+      console.error(`Failed to generate tier report for ${tierName}:`, err);
+    }
+  }
+}
+
+function getSanitizedTierName(tierHeading) {
+  return tierHeading.replace(/^##\s*/, "").replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").toLowerCase();
+}
+
+function getRunDir(item, prefixTierMap) {
+  const heading = resolveTierHeading(item, prefixTierMap);
+  const tierName = heading ? getSanitizedTierName(heading) : "uncategorized";
+  return join(RUNS_DIR, tierName, item.id);
+}
+
+const fileLocks = new Map();
+
+function withFileLock(targetFile, callback) {
+  const absoluteTarget = resolveRepoPath(targetFile);
+  const key = absoluteTarget || targetFile;
+  const previous = fileLocks.get(key) || Promise.resolve();
+
+  const next = previous.then(() => Promise.resolve().then(() => callback(absoluteTarget || targetFile)));
+  fileLocks.set(key, next.catch(() => {}));
+
+  return next.finally(() => {
+    if (fileLocks.get(key) === next || !fileLocks.has(key)) {
+      fileLocks.delete(key);
+    }
+  });
+}
+
+function writeFileAtomically(targetPath, contents) {
+  const absoluteTarget = resolveRepoPath(targetPath);
+  if (!absoluteTarget) {
+    writeFileSync(targetPath, contents);
+    return;
+  }
+  const tempFile = join(dirname(absoluteTarget), `${randomUUID()}.tmp`);
+  writeFileSync(tempFile, contents);
+  renameSync(tempFile, absoluteTarget);
+}
+
+function updateChecklistItemStatus(itemId, newStatus) {
+  return withFileLock(CHECKLIST_FILE, () => {
+    try {
+      const content = readFileSafe(CHECKLIST_FILE);
+      const lines = content.split("\n");
+      const newLines = lines.map(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith("|") && trimmed.includes(` ${itemId} `)) {
+          const parts = line.split("|");
+          if (parts.length >= 6) {
+            parts[5] = ` ${newStatus} `;
+            return parts.join("|");
+          }
+        }
+        return line;
+      });
+      writeFileAtomically(CHECKLIST_FILE, newLines.join("\n"));
+    } catch (err) {
+      console.error(`Failed to update status for ${itemId}:`, err);
+      throw err;
+    }
+  });
+}
+
+function getSanitizedTierName(tierHeading) {
+  return tierHeading.replace(/^##\s*/, "").replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "").toLowerCase();
+}
+
+function getRunDir(item, prefixTierMap) {
+  const heading = resolveTierHeading(item, prefixTierMap);
+  const tierName = heading ? getSanitizedTierName(heading) : "uncategorized";
+  return join(RUNS_DIR, tierName, item.id);
+}
+
 async function processChecklist() {
   const missionBrief = loadMissionBrief();
 
@@ -504,7 +666,73 @@ async function processChecklist() {
   }
 
   console.log("Next batch ready for processing:", batch.map(item => item.id).join(", "));
-  console.log("TODO: Implement the per-item execution pipeline. This update focuses on infinite backlog synthesis.");
+  
+  // Build prefix map for run dir resolution
+  const prefixTierMap = buildPrefixTierMap(items);
+
+  const promises = batch.map(async (item) => {
+    console.log(`Starting processing for ${item.id}...`);
+    
+    // Determine Run Directory
+    const runDir = getRunDir(item, prefixTierMap);
+    
+    // Create directory structure
+    if (!dryRun) {
+        mkdirSync(runDir, { recursive: true });
+        mkdirSync(join(runDir, "config"), { recursive: true });
+        mkdirSync(join(runDir, "dx_evaluation"), { recursive: true });
+        mkdirSync(join(runDir, "mocks"), { recursive: true });
+        mkdirSync(join(runDir, "pipelines"), { recursive: true });
+        mkdirSync(join(runDir, "research"), { recursive: true });
+        mkdirSync(join(runDir, "results"), { recursive: true });
+        mkdirSync(join(runDir, "tests"), { recursive: true });
+    }
+
+    // Prepare the specific prompt for this item
+    let prompt = agentSystemPrompt || "";
+    
+    // Simple substitutions
+    prompt = prompt.replace("{{ENTRY_ID}}", item.id)
+                   .replace("{{ENTRY_TITLE}}", item.target)
+                   .replace("{{PRIORITY}}", item.priority)
+                   .replace("{{RISK_CLASS}}", item.risk)
+                   .replace("{{INDUSTRY}}", "Tech") // Default
+                   .replace("{{DEPLOYMENT_MODE}}", "Dev") // Default
+                   .replace("{{CHECKLIST_FILE}}", CHECKLIST_FILE)
+                   .replace("{{MISSION_BRIEF}}", missionBrief || "No brief provided")
+                   .replace("{{RUN_DIR}}", formatPathForPrompt(runDir).replace(/\\/g, "/"));
+
+    // Append specific instruction
+    prompt += `\n\nYOUR CURRENT TASK:\nExecute checklist item ${item.id}: ${item.target}\n`;
+    prompt += `Perform the necessary tests/research. All artifacts MUST be saved in: ${formatPathForPrompt(runDir)}\n`;
+    prompt += `When you have completed the task and generated the FINAL-REPORT.md, you MUST output: "${COMPLETION_PROMISE}" to signal completion.\n`;
+
+    try {
+        if (dryRun) {
+            console.log(`[Dry Run] Would execute agent for ${item.id} in ${runDir}`);
+            return;
+        }
+
+        // Run the agent
+        const output = await runAgentWithPrompt(prompt, `task-${item.id}`);
+        
+        // Log output for debugging
+        const logPath = join(runDir, "results", "agent-log.txt");
+        writeFileSync(logPath, output);
+
+        console.log(`Item ${item.id} processed. Output saved to ${logPath}`);
+        
+        // Mark as complete
+        await updateChecklistItemStatus(item.id, "✅ Completed");
+        
+    } catch (err) {
+        console.error(`Error processing ${item.id}:`, err);
+        await updateChecklistItemStatus(item.id, "❌ Failed");
+    }
+  });
+
+  await Promise.all(promises);
+  console.log("Batch processing complete.");
 }
 
 function showStatus() {
@@ -546,8 +774,8 @@ function readFileSafe(path) {
   return readFileSync(path, "utf-8");
 }
 
-function ensureInfiniteBacklogSection(content) {
-  const header = "## Infinite Backlog";
+function ensureTierSection(content, tierName) {
+  const header = tierName.startsWith("## ") ? tierName : `## ${tierName}`;
   const tableHeader = "| ID | Target | Priority | Risk | Status |";
   const divider = "|----|--------|----------|------|--------|";
 
@@ -558,6 +786,10 @@ function ensureInfiniteBacklogSection(content) {
   const trimmed = content.trimEnd();
   const separator = trimmed ? "\n\n" : "";
   return `${trimmed}${separator}${header}\n${tableHeader}\n${divider}\n`;
+}
+
+function ensureInfiniteBacklogSection(content) {
+   return ensureTierSection(content, "Tier 4: Reliability & Backlog Expansion");
 }
 
 function formatChecklistRow(item) {
@@ -646,42 +878,89 @@ function groupItemsByTierHeading(items, prefixTierMap) {
 
 function appendRowsToChecklist(items, options = {}) {
   if (!items || items.length === 0) return;
-  const targetFile = options.targetFile || CHECKLIST_FILE;
-  const content = readFileSafe(targetFile) || "";
-  const lines = content ? content.split("\n") : [];
-  const tierMetadata = buildTierTableMetadata(lines);
-  const prefixTierMap = options.prefixTierMap || buildPrefixTierMap(parseChecklist());
-  const grouped = groupItemsByTierHeading(items, prefixTierMap);
+  const targetFile = resolveRepoPath(options.targetFile || CHECKLIST_FILE);
 
-  const insertions = Object.entries(grouped)
-    .map(([tierHeading, groupedItems]) => {
-      const meta = tierMetadata[tierHeading];
-      if (!meta || typeof meta.insertLine !== "number") {
-        console.warn(`Tier heading "${tierHeading}" not found in checklist. Skipping ${groupedItems.length} item(s).`);
-        return null;
+  return withFileLock(targetFile, () => {
+    let content = readFileSafe(targetFile) || "";
+    
+    // Ensure section exists for any new tiers
+    const uniqueTiers = [...new Set(items.map(i => i.tier).filter(Boolean))];
+    for (const tier of uniqueTiers) {
+      if (!content.includes(tier)) {
+         content = ensureTierSection(content, tier);
       }
-      return {
-        insertLine: meta.insertLine,
-        rows: groupedItems.map(formatChecklistRow),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.insertLine - a.insertLine);
+    }
 
-  for (const insertion of insertions) {
-    lines.splice(insertion.insertLine, 0, ...insertion.rows);
+    const lines = content ? content.split("\n") : [];
+    const tierMetadata = buildTierTableMetadata(lines);
+    const prefixTierMap = options.prefixTierMap || buildPrefixTierMap(parseChecklist());
+    const grouped = groupItemsByTierHeading(items, prefixTierMap);
+
+    const insertions = Object.entries(grouped)
+      .map(([tierHeading, groupedItems]) => {
+        const meta = tierMetadata[tierHeading];
+        if (!meta || typeof meta.insertLine !== "number") {
+          console.warn(`Tier heading "${tierHeading}" not found in checklist. Skipping ${groupedItems.length} item(s).`);
+          return null;
+        }
+        return {
+          insertLine: meta.insertLine,
+          rows: groupedItems.map(formatChecklistRow),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.insertLine - a.insertLine);
+
+    for (const insertion of insertions) {
+      lines.splice(insertion.insertLine, 0, ...insertion.rows);
+    }
+
+    writeFileAtomically(targetFile, lines.join("\n"));
+  });
+}
+
+function cleanAgentOutput(text) {
+  if (!text) return "";
+  // 1. Remove ANSI escape codes
+  let clean = text.replace(/\u001b\[[0-9;]*m/g, "");
+  
+  // 2. Remove "thought/action" lines often emitted by OpenCode/Claude
+  // Heuristic: If we find a line starting with "# ", treat that as the start of the document.
+  const headerMatch = clean.match(/^# /m);
+  if (headerMatch && typeof headerMatch.index === "number") {
+    return clean.slice(headerMatch.index).trimStart();
   }
 
-  writeFileSync(targetFile, lines.join("\n"));
+  // Fallback: Remove lines starting with pipe | or specific tool call patterns
+  clean = clean.split("\n")
+    .filter(line => !line.trim().startsWith("|") && !line.includes("Glob") && !line.includes("Read"))
+    .join("\n");
+    
+  return clean.trim();
 }
 
 function extractJsonPayload(text) {
   if (!text) return null;
   const fenced = text.match(/```json([\s\S]*?)```/i) || text.match(/```([\s\S]*?)```/i);
-  const candidate = fenced ? fenced[1].trim() : text.trim();
+  let candidate = fenced ? fenced[1].trim() : text.trim();
+  
   try {
     return JSON.parse(candidate);
-  } catch {
+  } catch (err) {
+    // If strict parsing failed, try to locate the first outer-most {} block
+    if (!fenced) {
+       const jsonBlock = text.match(/\{[\s\S]*\}/);
+       if (jsonBlock) {
+         try {
+           return JSON.parse(jsonBlock[0]);
+         } catch (e) {
+           // ignore inner parse error, fall through to warning
+         }
+       }
+    }
+
+    console.warn("JSON Parse Error:", err.message);
+    console.warn("Candidate JSON was:", candidate.substring(0, 500) + "...");
     return null;
   }
 }
@@ -700,6 +979,7 @@ function coerceGeneratedItems(payload) {
     priority: item.priority || "P2",
     risk: item.risk || "Moderate",
     status: item.status || "☐ Not Started",
+    tier: item.tier || "Tier 4: Reliability & Backlog Expansion"
   }));
 }
 
@@ -767,6 +1047,7 @@ if (require.main === module) {
 
 module.exports = {
   ensureInfiniteBacklogSection,
+  ensureTierSection,
   formatChecklistRow,
   extractJsonPayload,
   coerceGeneratedItems,
