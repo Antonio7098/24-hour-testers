@@ -6,6 +6,7 @@
 .secrets
 *.secrets
 credentials.json
+config/run_config.json
 *.key
 *.pem
 *.crt
