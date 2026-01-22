@@ -22,7 +22,7 @@ const stateDir = join(repoRoot, ".checklist-processor");
 const runsDir = join(repoRoot, "runs");
 const tierReportsDir = join(repoRoot, "tier-reports");
 const checklistFile = join(repoRoot, "SUT-CHECKLIST.md");
-const missionBriefFile = join(repoRoot, "SEU-PACKET.md");
+const missionBriefFile = join(repoRoot, "SUT-PACKET.md");
 
 const commands = {
   start: runProcessor,

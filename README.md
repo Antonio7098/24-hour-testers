@@ -26,7 +26,7 @@ Populate the following before starting automation:
 
 | File / Input | Purpose |
 |--------------|---------|
-| `SEU-PACKET.md` | Narrative SUT packet: mission, personas, system boundaries, high-risk areas, known integrations. Include live endpoints, ports, and rate limits. |
+| `SUT-PACKET.md` | Narrative SUT packet: mission, personas, system boundaries, high-risk areas, known integrations. Include live endpoints, ports, and rate limits. |
 | `config/run_config.json` | Machine-friendly knobs referenced by the SUT packet (SUT name/version, credentials key, datasets, stress parameters, success criteria). |
 | `.env` / secrets manager | Authentication material the agent needs (API keys, SSH tunnels, dataset URLs). Reference these names in `run_config.json`. |
 | `SUT-CHECKLIST.md` | Canonical backlog of everything to test. Update priorities/risks and mark ✅/☐ as automation progresses. |
@@ -52,24 +52,13 @@ For the autonomous loop to run without manual intervention, the binaries that th
 - Enable `bypassPermissions` (or the equivalent flag) in your user config so the automation can write files and run commands without prompting.
 - Override `OPENCODE_BIN` if you need to point at a wrapper that enforces those flags.
 
-### 3. Scaffold or Reuse a Run Directory
-
-```bash
-ENTRY_ID="CORE-001"
-RUN_DATE=$(date +%Y-%m-%d)
-RUN_SEQ="001"
-RUN_DIR="runs/${ENTRY_ID}/run-${RUN_DATE}-${RUN_SEQ}"
-
-mkdir -p "${RUN_DIR}"/{research,mocks/data/{happy_path,edge_cases,adversarial,scale},mocks/services,mocks/fixtures,tests,results/{metrics,traces,logs},dx_evaluation,config}
-```
-
-### 4. Launch the Automated Loop
+### 3. Launch the Automated Loop
 
 #### Option A – Unified CLI (recommended)
 
 ```bash
 npm run start -- --batch-size 5 --mode infinite \
-  --checklist SUT-CHECKLIST.md --mission-brief SEU-PACKET.md
+  --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md
 ```
 
 #### Option B – Direct script invocation
@@ -77,11 +66,11 @@ npm run start -- --batch-size 5 --mode infinite \
 ```
 # Windows (PowerShell)
 pwsh scripts/run-checklist.ps1 --batch-size 5 --mode infinite \
-  --checklist SUT-CHECKLIST.md --mission-brief SEU-PACKET.md
+  --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md
 
 # macOS / Linux
 bash scripts/run-checklist.sh --batch-size 5 --mode infinite \
-  --checklist SUT-CHECKLIST.md --mission-brief SEU-PACKET.md
+  --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md
 ```
 
 ### Unified CLI capabilities
@@ -110,7 +99,7 @@ The processor can target multiple agent runtimes. Configure them via flags or en
 
 In infinite mode the processor monitors how many unfinished checklist rows remain. Whenever the remaining pool drops below the configured `--batch-size`, it automatically:
 
-1. Reads the SUT packet (`SEU-PACKET.md`) plus the current contents of `SUT-CHECKLIST.md`.
+1. Reads the SUT packet (`SUT-PACKET.md`) plus the current contents of `SUT-CHECKLIST.md`.
 2. Prompts the synthesis agent (see `agent-resources/prompts/INFINITE_BACKLOG_PROMPT.md`) to generate just enough tier-appropriate rows to refill the batch.
 3. Inserts those rows back into the matching tier tables of the checklist before continuing.
 
@@ -136,7 +125,7 @@ Finite mode still stops when every row is ✅; infinite mode keeps the pipeline 
 
 | File | Purpose |
 |------|---------|
-| `SEU-PACKET.md` | SUT packet consumed by every agent |
+| `SUT-PACKET.md` | SUT packet consumed by every agent |
 | `SUT-CHECKLIST.md` | **Only** backlog file processed by automation |
 | `config/run_config.json` | Structured inputs (access, datasets, experiment knobs) |
 | `agent-resources/prompts/AGENT_SYSTEM_PROMPT.md` | Canonical instructions for autonomous agents |
@@ -199,7 +188,7 @@ Agents merge this with `mission-brief.md` to render prompts. Missing information
 `scripts/checklist-processor.js` is the only orchestrator you run. It streams new checklist rows into OpenCode sessions while persisting checkpoints.
 
 - **Finite mode** – stop when all rows in `SUT-CHECKLIST.md` are ✅.
-- **Infinite mode** – whenever the number of unfinished rows dips below the batch size, the processor invokes the backlog synthesis agent (feeding it `SEU-PACKET.md` + the existing checklist) to append enough tier-matched rows to restore a full batch.
+- **Infinite mode** – whenever the number of unfinished rows dips below the batch size, the processor invokes the backlog synthesis agent (feeding it `SUT-PACKET.md` + the existing checklist) to append enough tier-matched rows to restore a full batch.
 
 ### Tier-Level Reports (Automatic)
 
@@ -233,7 +222,7 @@ State is persisted under `.checklist-processor/`. Always version-control `missio
 
 ## Contributing Workflow
 
-1. Update `SEU-PACKET.md`, `config/run_config.json`, and `SUT-CHECKLIST.md` to describe the new SUT.
+1. Update `SUT-PACKET.md`, `config/run_config.json`, and `SUT-CHECKLIST.md` to describe the new SUT.
 2. Open secrets/credential PRs or ops requests needed for the agent to reach the SUT.
 3. Run `scripts/checklist-processor.js` (finite or infinite) and let it loop.
 4. Commit artifacts + findings.

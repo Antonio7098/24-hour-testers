@@ -29,7 +29,7 @@ function formatPathForPrompt(targetPath) {
 
 // Configuration
 let CHECKLIST_FILE = resolveRepoPath("SUT-CHECKLIST.md");
-const DEFAULT_MISSION_BRIEF_FILE = resolveRepoPath("SEU-PACKET.md");
+const DEFAULT_MISSION_BRIEF_FILE = resolveRepoPath("SUT-PACKET.md");
 const FALLBACK_MISSION_BRIEF_FILE = resolveRepoPath("README.md");
 const AGENT_PROMPT_FILE = resolveRepoPath("agent-resources/prompts/AGENT_SYSTEM_PROMPT.md");
 const TIER_REPORT_PROMPT_FILE = resolveRepoPath("agent-resources/prompts/TIER_REPORT_PROMPT.md");

@@ -38,8 +38,8 @@ Before starting, inspect the run directory for previous artifacts (research, moc
 
 1. **Industry / Domain context** – Regulations, risk tolerance, user personas, typical data flows.
 2. **Technical context** – Competing solutions, state-of-the-art techniques, incident reports, academic papers.
-3. **SUT architecture** – Read `SEU-PACKET.md`, roadmap notes, and any linked design docs. Identify relevant components, extension points, and known gaps.
-4. **Documentation sweep** – Skim `SEU-PACKET.md` and `agent-resources/` (roadmap, reference, prompts) plus any vendored specs. Capture ambiguity and contradictions as potential DX findings.
+3. **SUT architecture** – Read `SUT-PACKET.md`, roadmap notes, and any linked design docs. Identify relevant components, extension points, and known gaps.
+4. **Documentation sweep** – Skim `SUT-PACKET.md` and `agent-resources/` (roadmap, reference, prompts) plus any vendored specs. Capture ambiguity and contradictions as potential DX findings.
 
 Deliverable: `research/<entry>-summary.md` containing sources, quotes, hypotheses, risks, and success criteria.
 

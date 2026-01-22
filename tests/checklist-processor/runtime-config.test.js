@@ -12,7 +12,7 @@ const {
 
 const { repoPath } = require('../helpers/test-utils');
 
-const missionBriefPath = path.join(__dirname, "..", "..", "SEU-PACKET.md");
+const missionBriefPath = path.join(__dirname, "..", "..", "SUT-PACKET.md");
 
 const DEFAULT_CHECKLIST = repoPath("SUT-CHECKLIST.md");
 

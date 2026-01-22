@@ -8,7 +8,7 @@ echo "🚀 Starting Parallel Checklist Processor..."
 BATCH_SIZE=${BATCH_SIZE:-5}
 AGENT_RUNTIME=${AGENT_RUNTIME:-opencode}
 
-echo "This will process --checklist SUT-CHECKLIST.md --mission-brief SEU-PACKET.md using ${BATCH_SIZE} parallel ${AGENT_RUNTIME} subagents"
+echo "This will process --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md using ${BATCH_SIZE} parallel ${AGENT_RUNTIME} subagents"
 echo "(override with --batch-size, BATCH_SIZE, --runtime, or AGENT_RUNTIME)"
 echo ""
 
@@ -19,8 +19,8 @@ if [ ! -f "SUT-CHECKLIST.md" ]; then
 fi
 
 # Warn if mission brief missing (agents fall back to README)
-if [ ! -f "SEU-PACKET.md" ]; then
-    echo "⚠️  SEU-PACKET.md not found. Agents will fall back to README.md"
+if [ ! -f "SUT-PACKET.md" ]; then
+    echo "⚠️  SUT-PACKET.md not found. Agents will fall back to README.md"
 fi
 
 runtime_command_var="OPENCODE_BIN"

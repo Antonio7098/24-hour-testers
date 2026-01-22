@@ -20,7 +20,7 @@ try {
     $batchSize = if ($env:BATCH_SIZE) { $env:BATCH_SIZE } else { 5 }
     $agentRuntime = if ($env:AGENT_RUNTIME) { $env:AGENT_RUNTIME.ToLowerInvariant() } else { "opencode" }
 
-    Write-Host "Processing --checklist SUT-CHECKLIST.md --mission-brief SEU-PACKET.md with $batchSize parallel $agentRuntime subagents"
+    Write-Host "Processing --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md with $batchSize parallel $agentRuntime subagents"
     Write-Host "(override with --batch-size, BATCH_SIZE, --runtime, or AGENT_RUNTIME)"
     Write-Host ""
 
@@ -30,9 +30,9 @@ try {
         exit 1
     }
 
-    $missionBriefPath = Join-Path $repoRoot "SEU-PACKET.md"
+    $missionBriefPath = Join-Path $repoRoot "SUT-PACKET.md"
     if (-not (Test-Path $missionBriefPath)) {
-        Write-Warning "⚠️ SEU-PACKET.md not found. Agents will fall back to README.md"
+        Write-Warning "⚠️ SUT-PACKET.md not found. Agents will fall back to README.md"
     }
 
     $runtimeCommandVar = "OPENCODE_BIN"
