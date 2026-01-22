@@ -12,12 +12,13 @@ const {
 
 const { repoPath, writeTempFile } = require('../helpers/test-utils');
 
-const DEFAULT_CHECKLIST = repoPath('mission-checklist.md');
+const DEFAULT_CHECKLIST = repoPath("SUT-CHECKLIST.md");
 
 async function withChecklistFile(markdown, fn) {
   const { filePath } = writeTempFile(markdown, 'checklist.md');
+  const checklistPath = path.join(__dirname, "..", "..", "SUT-CHECKLIST.md");
   const previous = DEFAULT_CHECKLIST;
-  setChecklistFilePath(filePath);
+  setChecklistFilePath(checklistPath);
   try {
     return await fn(filePath);
   } finally {

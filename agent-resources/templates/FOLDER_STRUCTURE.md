@@ -8,8 +8,8 @@
 
 ```
 24h-testers/
-├── mission-brief.md              # Canonical SUT context packet
-├── mission-checklist.md          # Only backlog processed by automation
+├── SEU-PACKET.md              # SUT packet / dossier
+├── SUT-CHECKLIST.md          # Canonical backlog processed by automation
 ├── agent-resources/
 │   ├── prompts/AGENT_SYSTEM_PROMPT.md
 │   └── templates/

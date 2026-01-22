@@ -10,16 +10,12 @@ backlog so new rows match the tone and priorities of the existing plan.
 
 Inject the following values before handing the prompt to the agent:
 
-- `{{MISSION_BRIEF}}` — contents of `mission-brief.md` (or fallback overview).
-- `{{CHECKLIST_CONTENT}}` — current `scenario-checklist.md` markdown, including status.
+- `{{CHECKLIST_CONTENT}}` — current `SUT-CHECKLIST.md` markdown, including status.
 - `{{NEEDED_COUNT}}` — integer number of rows required to refill the batch.
 
 ```
 You are an autonomous reliability planner. When the existing backlog runs dry you must
 synthesize new checklist rows that feel like thoughtful follow-ons, not duplicates.
-
-Context about the system under test (SUT):
-{{MISSION_BRIEF}}
 
 Current checklist markdown (for reference, do not rewrite existing rows):
 {{CHECKLIST_CONTENT}}

@@ -28,8 +28,8 @@ function formatPathForPrompt(targetPath) {
 }
 
 // Configuration
-let CHECKLIST_FILE = resolveRepoPath("mission-checklist.md");
-const DEFAULT_MISSION_BRIEF_FILE = resolveRepoPath("mission-brief.md");
+let CHECKLIST_FILE = resolveRepoPath("SUT-CHECKLIST.md");
+const DEFAULT_MISSION_BRIEF_FILE = resolveRepoPath("SEU-PACKET.md");
 const FALLBACK_MISSION_BRIEF_FILE = resolveRepoPath("README.md");
 const AGENT_PROMPT_FILE = resolveRepoPath("agent-resources/prompts/AGENT_SYSTEM_PROMPT.md");
 const TIER_REPORT_PROMPT_FILE = resolveRepoPath("agent-resources/prompts/TIER_REPORT_PROMPT.md");
@@ -459,8 +459,9 @@ async function extendChecklistIfNeeded(missionBrief) {
 
   console.log(`Infinite mode: need ${needed} additional checklist item(s) to reach the batch target of ${batchSize}. Invoking synthesis agent...`);
 
+  const missionBriefLocal = missionBrief || loadMissionBrief();
   const prompt = buildBacklogSynthesisPrompt({
-    missionBrief,
+    missionBrief: missionBriefLocal,
     checklistContent,
     neededCount: needed,
   });
@@ -546,6 +547,7 @@ async function generateTierReportsIfNeeded(items, missionBrief) {
 
     const checklistRows = tierItems.map(formatChecklistRow).join("\n");
 
+    const missionBrief = loadMissionBrief();
     const prompt = tierReportPromptTemplate
       .replace("{{TIER_NAME}}", tierName)
       .replace("{{CHECKLIST_ROWS}}", checklistRows)

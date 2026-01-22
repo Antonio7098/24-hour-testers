@@ -11,7 +11,9 @@ const {
 
 const { repoPath } = require('../helpers/test-utils');
 
-const DEFAULT_CHECKLIST = repoPath('mission-checklist.md');
+const missionBriefPath = path.join(__dirname, "..", "..", "SEU-PACKET.md");
+
+const DEFAULT_CHECKLIST = repoPath("SUT-CHECKLIST.md");
 
 function withEnv(overrides, fn) {
   const originalEnv = { ...process.env };

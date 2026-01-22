@@ -21,7 +21,8 @@ const { parseChecklist } = processor;
 const stateDir = join(repoRoot, ".checklist-processor");
 const runsDir = join(repoRoot, "runs");
 const tierReportsDir = join(repoRoot, "tier-reports");
-const checklistFile = join(repoRoot, "mission-checklist.md");
+const checklistFile = join(repoRoot, "SUT-CHECKLIST.md");
+const missionBriefFile = join(repoRoot, "SEU-PACKET.md");
 
 const commands = {
   start: runProcessor,
