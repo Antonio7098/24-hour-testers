@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   parseChecklist,
@@ -16,9 +17,8 @@ const DEFAULT_CHECKLIST = repoPath("SUT-CHECKLIST.md");
 
 async function withChecklistFile(markdown, fn) {
   const { filePath } = writeTempFile(markdown, 'checklist.md');
-  const checklistPath = path.join(__dirname, "..", "..", "SUT-CHECKLIST.md");
   const previous = DEFAULT_CHECKLIST;
-  setChecklistFilePath(checklistPath);
+  setChecklistFilePath(filePath);
   try {
     return await fn(filePath);
   } finally {
