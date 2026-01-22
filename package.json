@@ -4,7 +4,6 @@
   "description": "> **Mission**: Keep an autonomous finding loop running. Describe the system under test (SUT), hand the loop a checklist, and let agents execute forever with zero manual babysitting.",
   "main": "index.js",
   "directories": {
-    "doc": "docs",
     "test": "tests"
   },
   "scripts": {

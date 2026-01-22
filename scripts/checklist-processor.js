@@ -31,8 +31,8 @@ function formatPathForPrompt(targetPath) {
 let CHECKLIST_FILE = resolveRepoPath("mission-checklist.md");
 const DEFAULT_MISSION_BRIEF_FILE = resolveRepoPath("mission-brief.md");
 const FALLBACK_MISSION_BRIEF_FILE = resolveRepoPath("README.md");
-const AGENT_PROMPT_FILE = resolveRepoPath("docs/prompts/AGENT_SYSTEM_PROMPT.md");
-const TIER_REPORT_PROMPT_FILE = resolveRepoPath("docs/prompts/TIER_REPORT_PROMPT.md");
+const AGENT_PROMPT_FILE = resolveRepoPath("agent-resources/prompts/AGENT_SYSTEM_PROMPT.md");
+const TIER_REPORT_PROMPT_FILE = resolveRepoPath("agent-resources/prompts/TIER_REPORT_PROMPT.md");
 const TIER_REPORTS_DIR = resolveRepoPath("tier-reports");
 const TIER_METADATA_FILE = join(TIER_REPORTS_DIR, "index.json");
 const RUNS_DIR = resolveRepoPath("runs");

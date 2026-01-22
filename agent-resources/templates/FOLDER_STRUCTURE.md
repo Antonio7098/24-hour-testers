@@ -10,9 +10,9 @@
 24h-testers/
 ├── mission-brief.md              # Canonical SUT context packet
 ├── mission-checklist.md          # Only backlog processed by automation
-├── docs/
+├── agent-resources/
 │   ├── prompts/AGENT_SYSTEM_PROMPT.md
-│   └── reference/
+│   └── templates/
 │       ├── FOLDER_STRUCTURE.md
 │       └── FINAL_REPORT_TEMPLATE.md
 ├── scripts/                      # checklist-processor, etc.

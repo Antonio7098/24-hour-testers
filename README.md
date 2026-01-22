@@ -33,7 +33,26 @@ Populate the following before starting automation:
 
 The loop will refuse to run if required keys are missing in `run_config.json` (see "Required SUT Inputs" below).
 
-### 2. Scaffold or Reuse a Run Directory
+### 2. Configure Agent Permissions (Crucial)
+
+For the autonomous loop to run without manual intervention, the binaries that the checklist processor launches must already bypass permission prompts. The processor simply shells out to whatever command is resolved via `AGENT_RUNTIME`, `CLAUDE_CODE_BIN`, or `OPENCODE_BIN`; it does **not** inject flags on your behalf. Make sure the binary you expose to the processor already runs in "auto-approve" mode.
+
+**Claude Code**:
+- Configure the runtime (settings file or CLI alias) so the `code` subcommand always includes `--dangerously-skip-permissions`.
+- If you cannot change global settings, point `CLAUDE_CODE_BIN` at a tiny wrapper script:
+  ```bash
+  # claude-auto.sh
+  exec claude code --dangerously-skip-permissions "$@"
+  ```
+  ```bash
+  export CLAUDE_CODE_BIN="$(pwd)/claude-auto.sh"
+  ```
+
+**OpenCode**:
+- Enable `bypassPermissions` (or the equivalent flag) in your user config so the automation can write files and run commands without prompting.
+- Override `OPENCODE_BIN` if you need to point at a wrapper that enforces those flags.
+
+### 3. Scaffold or Reuse a Run Directory
 
 ```bash
 ENTRY_ID="CORE-001"
@@ -44,19 +63,13 @@ RUN_DIR="runs/${ENTRY_ID}/run-${RUN_DATE}-${RUN_SEQ}"
 mkdir -p "${RUN_DIR}"/{research,mocks/data/{happy_path,edge_cases,adversarial,scale},mocks/services,mocks/fixtures,tests,results/{metrics,traces,logs},dx_evaluation,config}
 ```
 
-### 3. Launch the Automated Loop
+### 4. Launch the Automated Loop
 
 #### Option A – Unified CLI (recommended)
 
 ```bash
 npm run start -- --batch-size 5 --mode infinite \
   --checklist mission-checklist.md --mission-brief mission-brief.md
-
-# Helpers
-npm run status        # checklist-processor --status
-npm run dashboard     # Aggregated progress view
-npm run clean:dry     # Preview cleanup actions
-npm run clean         # Archive runs + reset checklist/state
 ```
 
 #### Option B – Direct script invocation
@@ -69,13 +82,6 @@ pwsh scripts/run-checklist.ps1 --batch-size 5 --mode infinite \
 # macOS / Linux
 bash scripts/run-checklist.sh --batch-size 5 --mode infinite \
   --checklist mission-checklist.md --mission-brief mission-brief.md
-
-# Direct Node invocation
-node scripts/checklist-processor.js \
-  --batch-size 5 \
-  --mode infinite \
-  --checklist mission-checklist.md \
-  --mission-brief mission-brief.md
 ```
 
 ### Unified CLI capabilities
@@ -86,7 +92,7 @@ node scripts/checklist-processor.js \
 | `npm run status` | Calls `--status` and prints agent/session progress. |
 | `npm run dashboard` | Renders tier-level breakdowns plus active-session metadata. |
 | `npm run clean:dry` | Shows what would be archived/reset without touching files. |
-| `npm run clean` | Archives `runs/` + `tier-reports/`, resets checklist rows to `☐ Not Started`, and wipes `.checklist-processor/` state. |
+| `npm run clean` | Archives `runs/` + `tier-reports/`, resets checklist rows to ☐ Not Started, and wipes `.checklist-processor/` state. |
 
 The CLI lives in `scripts/24h-cli.js` so the same workflow works on Windows, macOS, and Linux without PowerShell/Bash conditionals.
 
@@ -105,28 +111,18 @@ The processor can target multiple agent runtimes. Configure them via flags or en
 In infinite mode the processor monitors how many unfinished checklist rows remain. Whenever the remaining pool drops below the configured `--batch-size`, it automatically:
 
 1. Reads the SUT packet (`mission-brief.md`) plus the current contents of `mission-checklist.md`.
-2. Prompts the synthesis agent (see `docs/prompts/INFINITE_BACKLOG_PROMPT.md`) to generate just enough tier-appropriate rows to refill the batch.
+2. Prompts the synthesis agent (see `agent-resources/prompts/INFINITE_BACKLOG_PROMPT.md`) to generate just enough tier-appropriate rows to refill the batch.
 3. Inserts those rows back into the matching tier tables of the checklist before continuing.
 
 Finite mode still stops when every row is ✅; infinite mode keeps the pipeline full forever.
 
-### 4. Monitor Outputs (Optional)
-
-- `findings/{bugs|strengths|improvements}.json` – shared ledgers updated via `scripts/add_finding.py`.
-- `runs/**/FINAL_REPORT.md` – per-run wrap-up using the template.
-- `results/metrics|logs|traces` – telemetry captured by agents.
-- `.checklist-processor/status.json` – automation heartbeat.
-- `tier-reports/*.md` – automatically generated summaries whenever a tier is fully ✅.
-
----
-
-## Directory Layout (Conceptual)
+### Directory Layout (Conceptual)
 
 ```
 24h-testers/
-├── docs/
-│   └── reference/                # Templates and folder specs
-├── findings/                     # Canonical ledgers (bugs/strengths/improvements)
+├── agent-resources/
+│   ├── prompts/                  # System prompts for agents (e.g. infinite backlog, tier reports)
+│   └── templates/                # Document templates (e.g. Final Report)
 ├── mission-brief.md              # SUT packet / dossier
 ├── mission-checklist.md          # Canonical backlog
 ├── scripts/                      # Automation utilities (e.g., checklist processor)
@@ -143,11 +139,10 @@ Finite mode still stops when every row is ✅; infinite mode keeps the pipeline 
 | `mission-brief.md` | SUT packet consumed by every agent |
 | `mission-checklist.md` | **Only** backlog file processed by automation |
 | `config/run_config.json` | Structured inputs (access, datasets, experiment knobs) |
-| `docs/prompts/AGENT_SYSTEM_PROMPT.md` | Canonical instructions for autonomous agents |
-| `docs/prompts/INFINITE_BACKLOG_PROMPT.md` | Template used when synthesizing new backlog rows in infinite mode |
-| `docs/prompts/TIER_REPORT_PROMPT.md` | Prompt used when a tier completes to synthesize stakeholder reports |
-| `docs/reference/FINAL_REPORT_TEMPLATE.md` | Markdown template for final reports |
-| `findings/*.json` | Canonical ledgers for bugs, strengths, improvements |
+| `agent-resources/prompts/AGENT_SYSTEM_PROMPT.md` | Canonical instructions for autonomous agents |
+| `agent-resources/prompts/INFINITE_BACKLOG_PROMPT.md` | Template used when synthesizing new backlog rows in infinite mode |
+| `agent-resources/prompts/TIER_REPORT_PROMPT.md` | Prompt used when a tier completes to synthesize stakeholder reports |
+| `agent-resources/templates/FINAL_REPORT_TEMPLATE.md` | Markdown template for final reports |
 
 ---
 
@@ -168,11 +163,7 @@ Agents merge this with `mission-brief.md` to render prompts. Missing information
 
 ---
 
-## Finding & Severity Taxonomy
-
-**Finding Types**: `bug`, `security`, `performance`, `reliability`, `dx`, `improvement`, `documentation`, `silent_failure`, `observability`, `feature_request`.
-
-**Severity Levels**:
+## Severity Levels
 
 | Severity | Description | Response Target |
 |----------|-------------|-----------------|
@@ -203,34 +194,17 @@ Agents merge this with `mission-brief.md` to render prompts. Missing information
 
 ---
 
-## Aggregating Results
-
-When you need a portfolio view:
-
-```bash
-python - <<'PY'
-import json
-from pathlib import Path
-
-aggregate = []
-for ledger in Path('findings').glob('*.json'):
-    data = json.loads(Path(ledger).read_text() or "{}")
-    aggregate.extend(data.get('items', []))
-
-Path('aggregated_findings.json').write_text(
-    json.dumps({'total': len(aggregate), 'findings': aggregate}, indent=2)
-)
-PY
-```
-
----
-
 ## Automation: Checklist Processor
 
 `scripts/checklist-processor.js` is the only orchestrator you run. It streams new checklist rows into OpenCode sessions while persisting checkpoints.
 
 - **Finite mode** – stop when all rows in `mission-checklist.md` are ✅.
 - **Infinite mode** – whenever the number of unfinished rows dips below the batch size, the processor invokes the backlog synthesis agent (feeding it `mission-brief.md` + the existing checklist) to append enough tier-matched rows to restore a full batch.
+
+### Tier-Level Reports (Automatic)
+
+- After every batch, the processor checks whether an entire tier has reached ✅ status. When it has, `generateTierReportsIfNeeded` stitches together the individual run reports stored under `runs/<tier>/<ID>/` and writes an aggregated summary to `runs/<tier>/<tier>-FINAL-REPORT.md`.
+- The template for these summaries lives in `agent-resources/prompts/TIER_REPORT_PROMPT.md`. Customize that file if you want different output, but no manual invocation is required—the aggregation happens automatically as soon as a tier finishes.
 
 Helpful flags:
 
