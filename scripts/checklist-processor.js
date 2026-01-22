@@ -453,6 +453,8 @@ async function extendChecklistIfNeeded(missionBrief) {
   const remaining = getRemainingChecklistItems(items);
   const needed = Math.max(batchSize - remaining.length, 0);
 
+  console.log(`DEBUG: Infinite Mode Check - batchSize=${batchSize}, remaining=${remaining.length}, needed=${needed}`);
+
   if (needed <= 0) {
     return false;
   }
@@ -640,16 +642,27 @@ function getRunDir(item, prefixTierMap) {
 async function processChecklist() {
   const missionBrief = loadMissionBrief();
 
+  let initialExtensionPerformed = false;
+
   if (mode === MODE_INFINITE) {
-    const extended = await extendChecklistIfNeeded(missionBrief);
-    if (extended) {
+    initialExtensionPerformed = await extendChecklistIfNeeded(missionBrief);
+    if (initialExtensionPerformed) {
       console.log("Checklist extended to satisfy batch requirements. Continuing with processing loop.");
     }
   }
 
-  const items = parseChecklist();
+  let items = parseChecklist();
   await generateTierReportsIfNeeded(items, missionBrief);
-  const remaining = getRemainingChecklistItems(items);
+  let remaining = getRemainingChecklistItems(items);
+
+  if (remaining.length === 0 && mode === MODE_INFINITE) {
+    const synthesized = await extendChecklistIfNeeded(missionBrief);
+    if (synthesized) {
+      console.log("Infinite mode: synthesized additional backlog after initial parse. Recomputing remaining items...");
+      items = parseChecklist();
+      remaining = getRemainingChecklistItems(items);
+    }
+  }
 
   if (remaining.length === 0) {
     console.log(mode === MODE_INFINITE
