@@ -9,6 +9,9 @@ const {
   appendRowsToChecklist,
   readFileSafe,
   setChecklistFilePath,
+  ensureTierSection,
+  buildPrefixTierMap,
+  resolveTierHeading,
 } = require('../../scripts/checklist-processor');
 
 const { repoPath, writeTempFile } = require('../helpers/test-utils');
@@ -69,6 +72,62 @@ test('getRemainingChecklistItems filters out ✅ rows', async () => {
     const remaining = getRemainingChecklistItems(items);
     assert.equal(remaining.length, 1);
     assert.equal(remaining[0].id, 'CORE-002');
+  });
+});
+
+test('ensureTierSection appends missing tier scaffolding exactly once', () => {
+  const base = '# Intro copy\n';
+  const tierName = 'Tier 9 · Experimental';
+  const first = ensureTierSection(base, tierName);
+  assert.match(first, /## Tier 9 · Experimental/);
+  assert.match(first, /\| ID \| Target \| Priority \| Risk \| Status \|/);
+  const second = ensureTierSection(first, tierName);
+  assert.equal(second, first);
+});
+
+test('buildPrefixTierMap indexes prefixes and resolveTierHeading leverages them', () => {
+  const items = [
+    { id: 'WEB-001', tier: '## Tier Web Ops' },
+    { id: 'API-777', tier: 'Tier 2 · API Surface' },
+  ];
+  const map = buildPrefixTierMap(items);
+  assert.deepEqual(map, {
+    WEB: '## Tier Web Ops',
+    API: 'Tier 2 · API Surface',
+  });
+
+  const explicitTier = resolveTierHeading({ id: 'WEB-999', tier: 'Tier Override' }, map);
+  assert.equal(explicitTier, '## Tier Override');
+
+  const fromPrefix = resolveTierHeading({ id: 'API-123' }, map);
+  assert.equal(fromPrefix, '## Tier 2 · API Surface');
+
+  const missing = resolveTierHeading({ id: 'MISC-1' }, map);
+  assert.equal(missing, null);
+});
+
+test('appendRowsToChecklist creates missing tier sections before inserting rows', async () => {
+  const markdown = `## Tier 1 · Core\n\n| ID | Target | Priority | Risk | Status |\n|----|--------|----------|------|--------|\n| CORE-001 | Target | P1 | High | ☐ Not Started |\n`;
+
+  await withChecklistFile(markdown, async filePath => {
+    await appendRowsToChecklist([
+      {
+        id: 'OBS-200',
+        target: 'Observability drill',
+        priority: 'P2',
+        risk: 'Moderate',
+        status: '☐ Not Started',
+        tier: 'Tier 5 · Observability',
+      },
+    ], { targetFile: filePath });
+
+    const updated = fs.readFileSync(filePath, 'utf-8');
+    assert.match(updated, /## Tier 5 · Observability/);
+    const lines = updated.trim().split('\n');
+    const headerIndex = lines.findIndex(line => line.includes('Tier 5 · Observability'));
+    assert.ok(headerIndex >= 0, 'new tier header is present');
+    const rowLine = lines[headerIndex + 3];
+    assert.match(rowLine, /OBS-200/);
   });
 });
 

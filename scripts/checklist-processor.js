@@ -12,7 +12,13 @@ const { readFileSync, writeFileSync, existsSync, mkdirSync, openSync, closeSync,
 const { join, resolve, isAbsolute, relative, dirname } = require("path");
 const { randomUUID } = require("crypto");
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
+
+let spawnImplementation = spawn;
+
+function setSpawnImplementation(fn) {
+  spawnImplementation = typeof fn === "function" ? fn : spawn;
+}
 
 const repoRoot = resolve(__dirname, "..");
 
@@ -41,6 +47,29 @@ const BATCH_SIZE = 5;
 
 const MAX_ITERATIONS_PER_ITEM = 20;
 const COMPLETION_PROMISE = "ITEM_COMPLETE";
+const DEFAULT_AGENT_MAX_RETRIES = 3;
+const DEFAULT_AGENT_RETRY_DELAY_MS = 15_000;
+const DEFAULT_AGENT_FREEZE_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_RATE_LIMIT_WAIT_MINUTES = 60;
+const PERMISSION_ERROR_PATTERNS = [
+  /permission denied/i,
+  /access is denied/i,
+  /access denied/i,
+  /eacces/i,
+  /eperm/i,
+  /insufficient permissions/i,
+  /operation not permitted/i,
+];
+const RATE_LIMIT_PATTERNS = [
+  /rate limit/i,
+  /plan limit/i,
+  /quota/i,
+  /too many requests/i,
+  /http\s*429/i,
+  /billing hard limit/i,
+  /temporarily unavailable due to usage/i,
+];
+
 const MODE_FINITE = "finite";
 const MODE_INFINITE = "infinite";
 const RUNTIME_OPEN_CODE = "opencode";
@@ -122,6 +151,28 @@ let missionBriefCache = null;
 let tierReportPromptTemplate = existsSync(TIER_REPORT_PROMPT_FILE)
   ? readFileSync(TIER_REPORT_PROMPT_FILE, "utf-8")
   : null;
+let agentMaxRetries;
+let agentRetryDelayMs;
+let agentFreezeTimeoutMs;
+let rateLimitWaitMinutes;
+
+function getHardeningConfig() {
+  return {
+    agentMaxRetries,
+    agentRetryDelayMs,
+    agentFreezeTimeoutMs,
+    rateLimitWaitMinutes,
+  };
+}
+
+function resetHardeningConfig() {
+  agentMaxRetries = DEFAULT_AGENT_MAX_RETRIES;
+  agentRetryDelayMs = DEFAULT_AGENT_RETRY_DELAY_MS;
+  agentFreezeTimeoutMs = DEFAULT_AGENT_FREEZE_TIMEOUT_MS;
+  rateLimitWaitMinutes = DEFAULT_RATE_LIMIT_WAIT_MINUTES;
+}
+
+resetHardeningConfig();
 
 // Lazy-load mission brief (if present)
 function loadMissionBrief() {
@@ -200,6 +251,10 @@ Usage:
 Options:
   --batch-size N        Number of parallel items to process (default: 5)
   --max-iterations N   Max iterations per item (default: 20)
+  --agent-max-retries N  Number of restart attempts per agent (default: ${DEFAULT_AGENT_MAX_RETRIES})
+  --agent-retry-delay-seconds N  Delay between agent retries in seconds (default: ${DEFAULT_AGENT_RETRY_DELAY_MS / 1000})
+  --agent-freeze-timeout-seconds N  Inactivity window before an agent is considered frozen (default: ${DEFAULT_AGENT_FREEZE_TIMEOUT_MS / 1000})
+  --rate-limit-wait-minutes N  Cooldown when hitting plan/rate limits (default: ${DEFAULT_RATE_LIMIT_WAIT_MINUTES})
   --dry-run            Show what would be processed without running
   --resume             Resume from last checkpoint
   --mode TYPE          Mode: "finite" (default) or "infinite"
@@ -247,6 +302,34 @@ Examples:
       dryRun = true;
     } else if (arg === "--resume") {
       resume = true;
+    } else if (arg === "--agent-max-retries") {
+      const val = argv[++i];
+      if (!val || isNaN(parseInt(val))) {
+        console.error("Error: --agent-max-retries requires a number");
+        process.exit(1);
+      }
+      agentMaxRetries = Math.max(1, parseInt(val));
+    } else if (arg === "--agent-retry-delay-seconds") {
+      const val = argv[++i];
+      if (!val || isNaN(parseInt(val))) {
+        console.error("Error: --agent-retry-delay-seconds requires a number");
+        process.exit(1);
+      }
+      agentRetryDelayMs = Math.max(0, parseInt(val) * 1000);
+    } else if (arg === "--agent-freeze-timeout-seconds") {
+      const val = argv[++i];
+      if (!val || isNaN(parseInt(val))) {
+        console.error("Error: --agent-freeze-timeout-seconds requires a number");
+        process.exit(1);
+      }
+      agentFreezeTimeoutMs = Math.max(0, parseInt(val) * 1000);
+    } else if (arg === "--rate-limit-wait-minutes") {
+      const val = argv[++i];
+      if (!val || isNaN(parseInt(val))) {
+        console.error("Error: --rate-limit-wait-minutes requires a number");
+        process.exit(1);
+      }
+      rateLimitWaitMinutes = Math.max(0, parseInt(val));
     } else if (arg === "--mode") {
       const val = (argv[++i] || "").toLowerCase();
       if (![MODE_FINITE, MODE_INFINITE].includes(val)) {
@@ -1006,19 +1089,79 @@ function buildAgentInvocation() {
   return { command, args, label: runtime.label };
 }
 
-function runAgentWithPrompt(prompt, label) {
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function formatDuration(ms) {
+  if (!ms) return "0s";
+  const parts = [];
+  const hours = Math.floor(ms / 3_600_000);
+  const minutes = Math.floor((ms % 3_600_000) / 60_000);
+  const seconds = Math.floor((ms % 60_000) / 1000);
+  if (hours) parts.push(`${hours}h`);
+  if (minutes) parts.push(`${minutes}m`);
+  if (seconds || parts.length === 0) parts.push(`${seconds}s`);
+  return parts.join(" ");
+}
+
+function isRateLimitMessage(text) {
+  if (!text) return false;
+  return RATE_LIMIT_PATTERNS.some(pattern => pattern.test(text));
+}
+
+function isPermissionMessage(text) {
+  if (!text) return false;
+  return PERMISSION_ERROR_PATTERNS.some(pattern => pattern.test(text));
+}
+
+function withRetryMetadata(error, reason, details = {}) {
+  error.retryMetadata = {
+    retryable: true,
+    reason,
+    ...details,
+  };
+  return error;
+}
+
+function executeAgentAttempt({ prompt, label, freezeTimeoutMs }) {
   return new Promise((resolve, reject) => {
     const sessionId = randomUUID();
     const { command, args } = buildAgentInvocation();
-    const child = spawn(command, args, {
+    const child = spawnImplementation(command, args, {
       env: process.env,
       shell: process.platform === "win32",
     });
     ensureStateDir();
     const logPath = join(stateDir, `${label || "agent"}-${sessionId}.log`);
     const logFd = openSync(logPath, "w");
+    let logClosed = false;
+    const closeLog = () => {
+      if (!logClosed) {
+        closeSync(logFd);
+        logClosed = true;
+      }
+    };
     writeFileSync(logPath, `=== ${label || "agent"} ===\n\n`);
     let output = "";
+    let freezeTimer;
+    let freezeTriggered = false;
+
+    const refreshFreezeTimer = () => {
+      if (!freezeTimeoutMs) return;
+      clearTimeout(freezeTimer);
+      freezeTimer = setTimeout(() => {
+        freezeTriggered = true;
+        console.warn(`[${label || "agent"}] No output for ${formatDuration(freezeTimeoutMs)}. Terminating agent...`);
+        try {
+          child.kill();
+        } catch (killErr) {
+          console.error(`Failed to terminate frozen agent: ${killErr}`);
+        }
+      }, freezeTimeoutMs);
+    };
+
+    refreshFreezeTimer();
 
     child.stdin.write(prompt);
     child.stdin.end();
@@ -1027,27 +1170,95 @@ function runAgentWithPrompt(prompt, label) {
       const text = chunk.toString();
       output += text;
       writeFileSync(logPath, text, { flag: "a" });
+      refreshFreezeTimer();
     });
 
     child.stderr.on("data", chunk => {
       const text = chunk.toString();
       output += text;
       writeFileSync(logPath, text, { flag: "a" });
+      refreshFreezeTimer();
     });
 
     child.on("error", err => {
-      closeSync(logFd);
+      clearTimeout(freezeTimer);
+      closeLog();
       reject(err);
     });
 
     child.on("close", code => {
-      closeSync(logFd);
+      clearTimeout(freezeTimer);
+      closeLog();
+
+      if (freezeTriggered) {
+        return reject(withRetryMetadata(new Error("Agent became unresponsive and was terminated."), "freeze"));
+      }
+
       if (code !== 0) {
+        if (isRateLimitMessage(output)) {
+          return reject(withRetryMetadata(new Error(`Agent exited with rate limit (code ${code}).`), "rate_limit"));
+        }
+        if (isPermissionMessage(output)) {
+          return reject(withRetryMetadata(new Error(`Agent exited due to permission issues (code ${code}).`), "permission"));
+        }
         return reject(new Error(`Agent exited with code ${code}`));
       }
+
+      if (isRateLimitMessage(output)) {
+        return reject(withRetryMetadata(new Error("Agent output indicates plan/rate limits were hit."), "rate_limit"));
+      }
+
+      if (isPermissionMessage(output)) {
+        return reject(withRetryMetadata(new Error("Agent encountered permission issues."), "permission"));
+      }
+
       resolve(output);
     });
   });
+}
+
+async function runAgentWithPrompt(prompt, label, options = {}) {
+  const maxAttempts = Math.max(1, options.maxAttempts || agentMaxRetries);
+  const freezeTimeoutMs = options.freezeTimeoutMs ?? agentFreezeTimeoutMs;
+  const retryDelayMs = options.retryDelayMs ?? agentRetryDelayMs;
+  const rateLimitWaitMs = (options.rateLimitWaitMinutes ?? rateLimitWaitMinutes) * 60 * 1000;
+
+  let attempt = 0;
+  let lastError;
+
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    console.log(`[${label || "agent"}] Attempt ${attempt}/${maxAttempts}`);
+    try {
+      const output = await executeAgentAttempt({ prompt, label, freezeTimeoutMs });
+      return output;
+    } catch (error) {
+      lastError = error;
+      const { retryMetadata } = error;
+      const retryable = retryMetadata?.retryable;
+      const reason = retryMetadata?.reason;
+
+      if (!retryable || attempt >= maxAttempts) {
+        throw error;
+      }
+
+      if (reason === "rate_limit") {
+        const waitMs = rateLimitWaitMs || retryDelayMs;
+        console.warn(`[${label || "agent"}] Rate limit hit. Cooling down for ${formatDuration(waitMs)} before retrying...`);
+        await sleep(waitMs);
+      } else if (reason === "permission") {
+        console.warn(`[${label || "agent"}] Permission issue detected. Retrying in ${formatDuration(retryDelayMs)}...`);
+        await sleep(retryDelayMs);
+      } else if (reason === "freeze") {
+        console.warn(`[${label || "agent"}] Agent became unresponsive. Retrying in ${formatDuration(retryDelayMs)}...`);
+        await sleep(retryDelayMs);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error("Agent failed after all retry attempts.");
 }
 
 if (require.main === module) {
@@ -1070,9 +1281,15 @@ module.exports = {
   buildAgentInvocation,
   showStatus,
   parseChecklist,
+  buildPrefixTierMap,
+  resolveTierHeading,
   getRemainingChecklistItems,
   assignAgentConfigFromEnv,
   resetAgentConfig,
   setAgentConfig,
   setChecklistFilePath,
+  setSpawnImplementation,
+  getHardeningConfig,
+  resetHardeningConfig,
+  applyCliArgs,
 };
