@@ -78,7 +78,7 @@ bash scripts/run-checklist.sh --batch-size 5 --mode infinite \
 | Command | Description |
 |---------|-------------|
 | `npm run start -- [flags]` | Pass-through runner for `checklist-processor.js` with consistent env setup. |
-| `npm run status` | Calls `--status` and prints agent/session progress. |
+| `npm run status` | Calls `status` and prints agent/session progress. |
 | `npm run dashboard` | Renders tier-level breakdowns plus active-session metadata. |
 | `npm run clean:dry` | Shows what would be archived/reset without touching files. |
 | `npm run clean` | Archives `runs/` + `tier-reports/`, resets checklist rows to ☐ Not Started, and wipes `.checklist-processor/` state. |
@@ -185,7 +185,7 @@ Agents merge this with `mission-brief.md` to render prompts. Missing information
 
 ## Automation: Checklist Processor
 
-`scripts/checklist-processor.js` is the only orchestrator you run. It streams new checklist rows into OpenCode sessions while persisting checkpoints.
+`scripts/checklist-processor.js` is the orchestrator you run. It streams new checklist rows into OpenCode sessions while persisting checkpoints.
 
 - **Finite mode** – stop when all rows in `SUT-CHECKLIST.md` are ✅.
 - **Infinite mode** – whenever the number of unfinished rows dips below the batch size, the processor invokes the backlog synthesis agent (feeding it `SUT-PACKET.md` + the existing checklist) to append enough tier-matched rows to restore a full batch.
@@ -204,7 +204,7 @@ node scripts/checklist-processor.js --max-iterations 30
 node scripts/checklist-processor.js --runtime claude-code
 node scripts/checklist-processor.js --model claude-4.5-sonnet
 node scripts/checklist-processor.js --resume
-node scripts/checklist-processor.js --status
+node scripts/checklist-processor.js status
 ```
 
 State is persisted under `.checklist-processor/`. Always version-control `mission-checklist.md` (or your chosen checklist) to audit automated edits.

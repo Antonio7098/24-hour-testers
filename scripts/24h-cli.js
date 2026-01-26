@@ -15,8 +15,7 @@ const { join, resolve } = require("path");
 const repoRoot = resolve(__dirname, "..");
 process.chdir(repoRoot);
 
-const processor = require("./checklist-processor");
-const { parseChecklist } = processor;
+const { ChecklistParser } = require("./lib");
 
 const stateDir = join(repoRoot, ".checklist-processor");
 const runsDir = join(repoRoot, "runs");
@@ -69,7 +68,7 @@ function runProcessor(args) {
 }
 
 function showStatus() {
-  const result = spawnSync(process.execPath, [join(__dirname, "checklist-processor.js"), "--status"], {
+  const result = spawnSync(process.execPath, [join(__dirname, "checklist-processor.js"), "status"], {
     cwd: repoRoot,
     env: process.env,
     stdio: "inherit",
@@ -265,7 +264,11 @@ function resetProcessorState(dryRun) {
 
 function safeParseChecklist() {
   try {
-    return parseChecklist();
+    const parser = new ChecklistParser({
+      checklistPath: checklistFile,
+      repoRoot,
+    });
+    return parser.parse();
   } catch (err) {
     console.warn("Unable to parse checklist:", err.message);
     return [];
