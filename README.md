@@ -85,6 +85,126 @@ bash scripts/run-checklist.sh --batch-size 5 --mode infinite \
 
 The CLI lives in `scripts/24h-cli.js` so the same workflow works on Windows, macOS, and Linux without PowerShell/Bash conditionals.
 
+### CLI Usage Examples
+
+#### Running the Processor
+
+```bash
+# Basic run with default settings (5 parallel items, finite mode)
+npm run start --
+
+# Process 3 items at a time
+npm run start -- --batch-size 3
+
+# Dry run to see what would be processed
+npm run start -- --dry-run
+
+# Resume from last checkpoint
+npm run start -- --resume
+
+# Infinite mode with auto-backlog synthesis
+npm run start -- --mode infinite --batch-size 5
+
+# Limit to 10 iterations per item
+npm run start -- --max-iterations 10
+
+# Use Claude Code instead of OpenCode
+npm run start -- --runtime claude-code
+
+# Force a specific model
+npm run start -- --runtime opencode --model opencode/minimax-m2.1-free
+
+# Verbose debug output
+npm run start -- --verbose
+
+# Custom checklist and mission brief paths
+npm run start -- --checklist /path/to/checklist.md --mission-brief /path/to/packet.md
+
+# Set execution timeout (5 minutes)
+npm run start -- --timeout 300000
+
+# Combined: infinite mode with Claude, larger batch, debug logging
+npm run start -- --mode infinite --batch-size 10 --runtime claude-code --verbose
+```
+
+#### Monitoring Commands
+
+```bash
+# Check current processing status
+npm run status
+
+# View live dashboard with tier breakdowns
+npm run dashboard
+
+# Watch all agents in real-time
+npm run start -- --watch
+
+# List all active agents with their status
+npm run start -- agents
+
+# Show session history
+npm run start -- history
+```
+
+#### Viewing Logs
+
+```bash
+# View logs for a specific agent (e.g., SEC-001)
+npm run start -- logs SEC-001
+
+# View logs with more context (100 lines)
+npm run start -- logs SEC-001 --tail 100
+
+# Specify agent ID with flag
+npm run start -- logs --agent SEC-001
+```
+
+#### Managing Runtime
+
+```bash
+# Cancel all running agents
+npm run start -- cancel
+
+# Show version
+npm run start -- --version
+
+# Show help
+npm run start -- --help
+```
+
+#### Cleanup Commands
+
+```bash
+# Dry run cleanup (preview what would happen)
+npm run clean:dry
+
+# Apply cleanup (archive runs, reset checklist)
+npm run clean
+
+# Clean but keep tier reports
+npm run clean -- --keep-tier-reports
+
+# Equivalent to --apply
+npm run clean -- --yes
+```
+
+#### Environment Variables
+
+```bash
+# Set default runtime
+export AGENT_RUNTIME=claude-code
+
+# Set default model
+export AGENT_MODEL=claude-4.5-sonnet
+
+# Set binary paths
+export OPENCODE_BIN=/usr/local/bin/opencode
+export CLAUDE_CODE_BIN=/usr/local/bin/claude
+
+# Run with env vars respected
+npm run start --
+```
+
 ### Runtime + Model Selection
 
 The processor can target multiple agent runtimes. Configure them via flags or env vars:
@@ -96,6 +216,27 @@ The processor can target multiple agent runtimes. Configure them via flags or en
 
 - `--model <slug>` or `AGENT_MODEL` forces a model regardless of runtime defaults.
 - Platform runners automatically export `AGENT_RUNTIME` based on `--runtime` / `AGENT_RUNTIME` to keep scripts portable.
+
+### Flag Reference
+
+| Flag | Alias | Description | Default |
+|------|-------|-------------|---------|
+| `--batch-size N` | | Number of parallel items to process | 5 |
+| `--max-iterations N` | | Max iterations per checklist item | 20 |
+| `--mode TYPE` | | Processing mode: `finite` or `infinite` | finite |
+| `--dry-run` | | Preview processing without executing agents | false |
+| `--resume` | | Continue from last checkpoint | false |
+| `--checklist PATH` | | Path to checklist markdown file | `SUT-CHECKLIST.md` |
+| `--mission-brief PATH` | | Path to mission brief file | `SUT-PACKET.md` |
+| `--runtime NAME` | | Agent runtime: `opencode` or `claude-code` | `AGENT_RUNTIME` or `opencode` |
+| `--model MODEL` | | Model slug to use | `AGENT_MODEL` or runtime default |
+| `--timeout MS` | | Agent execution timeout in milliseconds | 300000 (5 min) |
+| `--verbose` | | Enable debug logging | false |
+| `--watch` | `-w` | Enable live status updates | false |
+| `--tail N` | `-n` | Number of log lines to display | 50 |
+| `--agent ID` | `-a` | Agent ID for logs command | null |
+| `--help` | `-h` | Show help message | - |
+| `--version` | `-v` | Show version | - |
 
 In infinite mode the processor monitors how many unfinished checklist rows remain. Whenever the remaining pool drops below the configured `--batch-size`, it automatically:
 
