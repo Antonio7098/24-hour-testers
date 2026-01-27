@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "id": "INF-001",
+      "target": "Bulk create multiple items via POST `/items/bulk` with array payload and verify all items are created",
+      "priority": "P1",
+      "risk": "High",
+      "status": "☐ Not Started",
+      "tier": "Tier 4: Advanced Operations"
+    },
+    {
+      "id": "INF-002",
+      "target": "Update an existing item via PUT `/items/<id>` with modified JSON payload and confirm changes persist via GET",
+      "priority": "P2",
+      "risk": "Moderate",
+      "status": "☐ Not Started",
+      "tier": "Tier 4: Advanced Operations"
+    }
+  ]
+}
