@@ -13,11 +13,11 @@ import pytest
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from stageflow_processor.config import ProcessorConfig, ProcessingMode
-from stageflow_processor.models import ChecklistItem
-from stageflow_processor.processor import ChecklistProcessor
-from stageflow_processor.stages.generate_report import GenerateTierReportStage
-from stageflow_processor.utils.checklist_parser import ChecklistParser
+from processor.config import ProcessorConfig, ProcessingMode
+from processor.models import ChecklistItem
+from processor.processor import ChecklistProcessor
+from processor.stages.generate_report import GenerateTierReportStage
+from processor.utils.checklist_parser import ChecklistParser
 
 
 class TestJsonPayloadExtraction:
