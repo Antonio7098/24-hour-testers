@@ -1,372 +1,270 @@
 # 24h Testers Autonomous Reliability Loop
 
-> **Mission**: Keep an autonomous finding loop running. Describe the system under test (SUT), hand the loop a checklist, and let agents execute forever with zero manual babysitting.
+> **Mission**: Keep an autonomous finding loop running. Feed it a mission packet and a checklist, then let Stageflow agents execute forever with zero babysitting.
 
 ---
 
 ## Overview
 
-24h Testers is an autonomous reliability harness. You supply **one SUT packet** (what to test, how to reach it, which credentials + datasets to use) and **one canonical checklist**. The loop continuously:
+24h Testers now runs on a **Python 3.11 Stageflow** pipeline (see the `processor/` package). The Stageflow DAG powers finite and infinite modes, backlog synthesis, tier reports, structured retries, and a modern CLI—delivering the same autonomous reliability loop with deeper observability and fail-fast behavior.
 
-1. Reads the packet + checklist context.
-2. Picks unfinished checklist rows.
-3. Spawns autonomous OpenCode or Claude Code agents to research, simulate, build, and test.
-4. Writes structured findings and reports.
-5. Synthesizes fresh backlog when existing work is exhausted (infinite mode).
+You supply two canonical inputs:
 
-No manual step is required beyond updating config/checklist inputs.
+1. **SUT Packet (`SUT-PACKET.md`)** – mission context, interfaces, constraints, datasets, personas.
+2. **Checklist (`SUT-CHECKLIST.md`)** – tiered backlog where agents record ✅/☐ progress.
+
+The Stageflow pipeline continuously:
+
+1. Parses the mission brief + backlog.
+2. Builds prompts per checklist item.
+3. Spawns OpenCode or Claude Code agents (`opencode run --model …` / `claude code …`).
+4. Validates completion markers and final reports.
+5. Writes back status to the checklist.
+6. Generates stakeholder-ready tier summaries once an entire tier is ✅.
+7. In **infinite mode**, fills the backlog by asking an LLM to synthesize new rows.
+
+State persists under `.processor/`; per-item artifacts live in `runs/<tier>/<item-id>/`.
 
 ---
 
-## Quick Start: Running the Loop
+## Quick Start
 
-### 1. Describe the SUT Packet
-
-Populate the following before starting automation:
+### 1. Prepare Inputs
 
 | File / Input | Purpose |
 |--------------|---------|
-| `SUT-PACKET.md` | Narrative SUT packet: mission, personas, system boundaries, high-risk areas, known integrations. Include live endpoints, ports, and rate limits. |
-| `config/run_config.json` | Machine-friendly knobs referenced by the SUT packet (SUT name/version, credentials key, datasets, stress parameters, success criteria). |
-| `.env` / secrets manager | Authentication material the agent needs (API keys, SSH tunnels, dataset URLs). Reference these names in `run_config.json`. |
-| `SUT-CHECKLIST.md` | Canonical backlog of everything to test. Update priorities/risks and mark ✅/☐ as automation progresses. |
+| `SUT-PACKET.md` | Narrative mission brief (architecture, risks, endpoints, personas, SLAs). |
+| `SUT-CHECKLIST.md` | Canonical backlog grouped by tiers. The processor edits this file in place. |
+| `config/run_config.json` | Machine-parsable knobs used by prompts (SUT name, credential keys, datasets, success criteria). |
+| Secrets / `.env` / Vault | Tokens referenced by `run_config.json`. Ensure binaries can read them non-interactively. |
 
-The loop will refuse to run if required keys are missing in `run_config.json` (see "Required SUT Inputs" below).
+### 2. Configure Agent Permissions
 
-### 2. Configure Agent Permissions (Crucial)
+The processor **does not** inject permission flags. Configure your binaries up-front:
 
-For the autonomous loop to run without manual intervention, the binaries that the checklist processor launches must already bypass permission prompts. The processor simply shells out to whatever command is resolved via `AGENT_RUNTIME`, `CLAUDE_CODE_BIN`, or `OPENCODE_BIN`; it does **not** inject flags on your behalf. Make sure the binary you expose to the processor already runs in "auto-approve" mode.
+- **OpenCode** – enable `bypassPermissions` (or equivalent) in your profile; override `OPENCODE_BIN` if you need a wrapper.
+- **Claude Code** – ensure `claude code` always runs with `--dangerously-skip-permissions`; wrap it if necessary and point `CLAUDE_CODE_BIN` to the wrapper.
 
-**Claude Code**:
-- Configure the runtime (settings file or CLI alias) so the `code` subcommand always includes `--dangerously-skip-permissions`.
-- If you cannot change global settings, point `CLAUDE_CODE_BIN` at a tiny wrapper script:
-  ```bash
-  # claude-auto.sh
-  exec claude code --dangerously-skip-permissions "$@"
-  ```
-  ```bash
-  export CLAUDE_CODE_BIN="$(pwd)/claude-auto.sh"
-  ```
-
-**OpenCode**:
-- Enable `bypassPermissions` (or the equivalent flag) in your user config so the automation can write files and run commands without prompting.
-- Override `OPENCODE_BIN` if you need to point at a wrapper that enforces those flags.
-
-### 3. Launch the Automated Loop
-
-#### Option A – Unified CLI (recommended)
+### 3. Install Dependencies
 
 ```bash
-npm run start -- --batch-size 5 --mode infinite \
-  --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r processor/requirements.txt
 ```
 
-#### Option B – Direct script invocation
+### 4. Run the Stageflow Processor
 
+#### CLI entry point
+
+```bash
+# Infinite mode with OpenCode + Minimax M2.1
+python -m processor.cli run \
+  --checklist SUT-CHECKLIST.md \
+  --mission-brief SUT-PACKET.md \
+  --mode infinite \
+  --batch-size 5 \
+  --runtime opencode \
+  --model minimax-coding-plan/MiniMax-M2.1
 ```
-# Windows (PowerShell)
-pwsh scripts/run-checklist.ps1 --batch-size 5 --mode infinite \
-  --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md
 
-# macOS / Linux
-bash scripts/run-checklist.sh --batch-size 5 --mode infinite \
-  --checklist SUT-CHECKLIST.md --mission-brief SUT-PACKET.md
+Additional examples:
+
+```bash
+# Finite mode, 3-at-a-time, Claude Code runtime
+python -m processor.cli run \
+  --batch-size 3 \
+  --mode finite \
+  --runtime claude-code \
+  --model anthropic/claude-3-5-sonnet-20241022
+
+# Dry run to see which rows would be processed
+python -m processor.cli run --dry-run
+
+# Resume using a custom checklist + mission brief
+python -m processor.cli run \
+  --checklist ./custom/checklist.md \
+  --mission-brief ./custom/packet.md \
+  --resume
+
+# Increase timeout and enable verbose logging
+python -m processor.cli run \
+  --timeout 600000 \
+  --verbose
+
+# Watch live progress (auto-refreshing status)
+python -m processor.cli run --watch
 ```
 
-### Unified CLI capabilities
+Key subcommands:
 
 | Command | Description |
 |---------|-------------|
-| `npm run start -- [flags]` | Pass-through runner for `checklist-processor.js` with consistent env setup. |
-| `npm run status` | Calls `status` and prints agent/session progress. |
-| `npm run dashboard` | Renders tier-level breakdowns plus active-session metadata. |
-| `npm run clean:dry` | Shows what would be archived/reset without touching files. |
-| `npm run clean` | Archives `runs/` + `tier-reports/`, resets checklist rows to ☐ Not Started, and wipes `.checklist-processor/` state. |
+| `python -m processor.cli run [flags]` | Execute the Stageflow DAG (finite/infinite). |
+| `python -m processor.cli status` | Show active session from `.processor/active-runs.json`. |
+| `python -m processor.cli history` | List historical sessions stored under `.processor/`. |
+| `python -m processor.cli dashboard` | Tier-level summary + backlog snapshot. |
+| `python -m processor.cli cancel` | Cancel all active agent subprocesses.
 
-The CLI lives in `scripts/24h-cli.js` so the same workflow works on Windows, macOS, and Linux without PowerShell/Bash conditionals.
+Pass `--verbose` for Stageflow debug logs; combine `--dry-run` with other flags to preview a batch.
 
-### CLI Usage Examples
+---
 
-#### Running the Processor
+## Configuration & Flags
 
-```bash
-# Basic run with default settings (5 parallel items, finite mode)
-npm run start --
+### ProcessorConfig defaults
 
-# Process 3 items at a time
-npm run start -- --batch-size 3
+- `runtime`: `opencode`
+- `model`: `minimax-coding-plan/MiniMax-M2.1`
+- `batch_size`: `5`
+- `mode`: `finite`
+- `timeout_ms`: `300000`
+- `state_dir`: `.processor`
+- `runs_dir`: `runs/`
 
-# Dry run to see what would be processed
-npm run start -- --dry-run
+CLI flags override these defaults:
 
-# Resume from last checkpoint
-npm run start -- --resume
+| Flag | Description |
+|------|-------------|
+| `--batch-size N` | Number of checklist rows processed in parallel. |
+| `--mode {finite,infinite}` | Stop at ✅ or keep synthesizing backlog. |
+| `--runtime {opencode,claude-code}` | Agent runtime. |
+| `--model SLUG` | Model slug for the runtime. |
+| `--timeout MS` | Agent execution timeout. |
+| `--dry-run` | Build prompts but skip agent subprocesses. |
+| `--checklist PATH` / `--mission-brief PATH` | Custom file locations. |
+| `--verbose` | Emit Stageflow debug logs. |
 
-# Infinite mode with auto-backlog synthesis
-npm run start -- --mode infinite --batch-size 5
-
-# Limit to 10 iterations per item
-npm run start -- --max-iterations 10
-
-# Use Claude Code instead of OpenCode
-npm run start -- --runtime claude-code
-
-# Force a specific model
-npm run start -- --runtime opencode --model opencode/minimax-m2.1-free
-
-# Verbose debug output
-npm run start -- --verbose
-
-# Custom checklist and mission brief paths
-npm run start -- --checklist /path/to/checklist.md --mission-brief /path/to/packet.md
-
-# Set execution timeout (5 minutes)
-npm run start -- --timeout 300000
-
-# Combined: infinite mode with Claude, larger batch, debug logging
-npm run start -- --mode infinite --batch-size 10 --runtime claude-code --verbose
-```
-
-#### Monitoring Commands
+Environment helpers:
 
 ```bash
-# Check current processing status
-npm run status
-
-# View live dashboard with tier breakdowns
-npm run dashboard
-
-# Watch all agents in real-time
-npm run start -- --watch
-
-# List all active agents with their status
-npm run start -- agents
-
-# Show session history
-npm run start -- history
-```
-
-#### Viewing Logs
-
-```bash
-# View logs for a specific agent (e.g., SEC-001)
-npm run start -- logs SEC-001
-
-# View logs with more context (100 lines)
-npm run start -- logs SEC-001 --tail 100
-
-# Specify agent ID with flag
-npm run start -- logs --agent SEC-001
-```
-
-#### Managing Runtime
-
-```bash
-# Cancel all running agents
-npm run start -- cancel
-
-# Show version
-npm run start -- --version
-
-# Show help
-npm run start -- --help
-```
-
-#### Cleanup Commands
-
-```bash
-# Dry run cleanup (preview what would happen)
-npm run clean:dry
-
-# Apply cleanup (archive runs, reset checklist)
-npm run clean
-
-# Clean but keep tier reports
-npm run clean -- --keep-tier-reports
-
-# Equivalent to --apply
-npm run clean -- --yes
-```
-
-#### Environment Variables
-
-```bash
-# Set default runtime
 export AGENT_RUNTIME=claude-code
-
-# Set default model
-export AGENT_MODEL=claude-4.5-sonnet
-
-# Set binary paths
+export AGENT_MODEL=claude-3-5-sonnet-20241022
 export OPENCODE_BIN=/usr/local/bin/opencode
 export CLAUDE_CODE_BIN=/usr/local/bin/claude
-
-# Run with env vars respected
-npm run start --
 ```
 
-### Runtime + Model Selection
+---
 
-The processor can target multiple agent runtimes. Configure them via flags or env vars:
+## Pipeline Architecture (processor/processor.py)
 
-| Runtime | Flag value | Default model | Override env vars |
-|---------|------------|---------------|-------------------|
-| OpenCode | `--runtime opencode` | `opencode/minimax-m2.1-free` | `OPENCODE_BIN`, `OPENCODE_MODEL` |
-| Claude Code | `--runtime claude-code` | `claude-4.5-sonnet` | `CLAUDE_CODE_BIN`, `CLAUDE_CODE_MODEL` |
+1. **ParseChecklistStage** – loads markdown, builds tier map, selects remaining rows.
+2. **BuildPromptStage** – injects mission brief + item metadata into `AGENT_SYSTEM_PROMPT`.
+3. **RunAgentStage** – runs `opencode run --model …` (or Claude) via asyncio, capturing stdout/stderr, enforcing timeouts, and writing logs under `runs/<tier>/<item>/results/`.
+4. **ValidateOutputStage** – checks completion markers + final reports.
+5. **UpdateStatusStage** – writes ✅/❌ back to the checklist via `ChecklistParser`.
 
-- `--model <slug>` or `AGENT_MODEL` forces a model regardless of runtime defaults.
-- Platform runners automatically export `AGENT_RUNTIME` based on `--runtime` / `AGENT_RUNTIME` to keep scripts portable.
+Additional tasks:
 
-### Flag Reference
+- **GenerateTierReportStage** – when every item in a tier is ✅, crafts a prompt from `agent-resources/prompts/TIER_REPORT_PROMPT.md`, invokes the agent, cleans output, and writes `runs/<tier>/<tier>-FINAL-REPORT.md`.
+- **Backlog Synthesis** – `_extend_checklist_if_needed` runs in infinite mode. It reads `INFINITE_BACKLOG_PROMPT.md`, collects JSON, coerces it into `ChecklistItem` entries, appends them to `SUT-CHECKLIST.md`, and logs synthesis output under `.processor/synthesis/`.
 
-| Flag | Alias | Description | Default |
-|------|-------|-------------|---------|
-| `--batch-size N` | | Number of parallel items to process | 5 |
-| `--max-iterations N` | | Max iterations per checklist item | 20 |
-| `--mode TYPE` | | Processing mode: `finite` or `infinite` | finite |
-| `--dry-run` | | Preview processing without executing agents | false |
-| `--resume` | | Continue from last checkpoint | false |
-| `--checklist PATH` | | Path to checklist markdown file | `SUT-CHECKLIST.md` |
-| `--mission-brief PATH` | | Path to mission brief file | `SUT-PACKET.md` |
-| `--runtime NAME` | | Agent runtime: `opencode` or `claude-code` | `AGENT_RUNTIME` or `opencode` |
-| `--model MODEL` | | Model slug to use | `AGENT_MODEL` or runtime default |
-| `--timeout MS` | | Agent execution timeout in milliseconds | 300000 (5 min) |
-| `--verbose` | | Enable debug logging | false |
-| `--watch` | `-w` | Enable live status updates | false |
-| `--tail N` | `-n` | Number of log lines to display | 50 |
-| `--agent ID` | `-a` | Agent ID for logs command | null |
-| `--help` | `-h` | Show help message | - |
-| `--version` | `-v` | Show version | - |
+---
 
-In infinite mode the processor monitors how many unfinished checklist rows remain. Whenever the remaining pool drops below the configured `--batch-size`, it automatically:
-
-1. Reads the SUT packet (`SUT-PACKET.md`) plus the current contents of `SUT-CHECKLIST.md`.
-2. Prompts the synthesis agent (see `agent-resources/prompts/INFINITE_BACKLOG_PROMPT.md`) to generate just enough tier-appropriate rows to refill the batch.
-3. Inserts those rows back into the matching tier tables of the checklist before continuing.
-
-Finite mode still stops when every row is ✅; infinite mode keeps the pipeline full forever.
-
-### Directory Layout (Conceptual)
+## Directory Layout
 
 ```
 24h-testers/
 ├── agent-resources/
-│   ├── prompts/                  # System prompts for agents (e.g. tier reports)
-│   └── templates/                # Document templates (e.g. Final Report)
-├── SUT-PACKET.md               # SUT packet / dossier
-├── SUT-CHECKLIST.md          # Canonical backlog
-├── scripts/                      # Automation utilities (e.g., checklist processor)
-├── tests/                        # Harness + fixtures reused across runs
-└── runs/ENTRY/run-YYYY-MM-DD-NN  # Per-run artifacts emitted by automation
+│   ├── prompts/                 # AGENT_SYSTEM_PROMPT, INFINITE_BACKLOG_PROMPT, TIER_REPORT_PROMPT
+│   └── templates/               # FINAL_REPORT_TEMPLATE, PR template, etc.
+├── config/run_config.json       # Structured SUT config consumed by prompts
+├── processor/                   # Stageflow CLI, stages, interceptors, utils
+├── runs/                        # Created at runtime (per-tier artifacts)
+├── .processor/                  # Session state (created at runtime)
+├── SUT-PACKET.md
+├── SUT-CHECKLIST.md
+└── README.md
 ```
 
 ---
 
-## Key References
+## Key Prompts & Templates
 
 | File | Purpose |
 |------|---------|
-| `SUT-PACKET.md` | SUT packet consumed by every agent |
-| `SUT-CHECKLIST.md` | **Only** backlog file processed by automation |
-| `config/run_config.json` | Structured inputs (access, datasets, experiment knobs) |
-| `agent-resources/prompts/AGENT_SYSTEM_PROMPT.md` | Canonical instructions for autonomous agents |
-| `agent-resources/prompts/INFINITE_BACKLOG_PROMPT.md` | Template used when synthesizing new backlog rows in infinite mode |
-| `agent-resources/prompts/TIER_REPORT_PROMPT.md` | Prompt used when a tier completes to synthesize stakeholder reports |
-| `agent-resources/templates/FINAL_REPORT_TEMPLATE.md` | Markdown template for final reports |
+| `agent-resources/prompts/AGENT_SYSTEM_PROMPT.md` | Primary instructions per checklist item. |
+| `agent-resources/prompts/INFINITE_BACKLOG_PROMPT.md` | JSON spec for backlog synthesis. |
+| `agent-resources/prompts/TIER_REPORT_PROMPT.md` | Tier aggregation instructions. |
+| `agent-resources/templates/FINAL_REPORT_TEMPLATE.md` | Markdown scaffold for per-item final reports. |
 
 ---
 
-## Required SUT Inputs
-
-`config/run_config.json` must include at least:
+## Required `run_config.json` Fields
 
 | Field | Description |
 |-------|-------------|
-| `sut_name` / `sut_version` | Human-readable identifier + commit/tag under test. |
-| `access.instructions` | Plain-language steps for bootstrapping connectivity (e.g., SSH jump host, tunnel commands, VPN, package installation). |
-| `access.credentials_key` | Name of the secret (ENV or vault path) that stores auth tokens. |
-| `datasets` | Paths or URLs for happy-path, adversarial, scale, and compliance datasets. |
-| `environments` | Targets (dev/staging/prod), including base URLs and feature flags. |
-| `success_criteria` | Quantitative targets the agent should treat as pass/fail gates. |
+| `sut_name` / `sut_version` | Human-readable identifier + build/tag. |
+| `access.instructions` | Connectivity steps (VPN, jump host, SSH, tunnels). |
+| `access.credentials_key` | Secret name or env key used by agents. |
+| `datasets` | Happy-path, adversarial, compliance dataset references. |
+| `environments` | Target base URLs, feature flags, staging/prod info. |
+| `success_criteria` | Quantitative gates (latency, error rate, coverage thresholds). |
 
-Agents merge this with `mission-brief.md` to render prompts. Missing information halts the loop so misconfigured runs fail fast.
-
----
-
-## Severity Levels
-
-| Severity | Description | Response Target |
-|----------|-------------|-----------------|
-| `critical` | Outage, irreversible impact | Immediate mitigation |
-| `high` | Major functionality broken, no workaround | < 1 week |
-| `medium` | Partial impairment with workaround | < 1 month |
-| `low` | Minor or cosmetic | Backlog |
-| `info` | Observation / suggestion | Optional |
+Missing keys halt the run with a descriptive error before any agents start.
 
 ---
 
-## Agent Operating Principles
+## Infinite Mode Tips
 
-**Do**
-
-- Research before touching code.
-- Start with minimal reproductions, then scale up.
-- Capture logs, metrics, and traces for every experiment.
-- Think adversarially and hunt for silent failures.
-- Document DX friction honestly.
-
-**Avoid**
-
-- Skipping context gathering.
-- Writing unverified or uninstrumented code.
-- Assuming behavior without evidence.
-- Letting artifacts drift from the shared folder structure.
+1. Keep tier headings consistent (`## Tier 1: …`). The parser uses them for routing.
+2. The synthesis agent must emit valid JSON. `_extract_json_payload` strips code fences and ANSI sequences, but malformed payloads are discarded.
+3. Backlog items can introduce new tiers; `ChecklistParser` will append new tables automatically.
 
 ---
 
-## Automation: Checklist Processor
+## Tier Reports
 
-`scripts/checklist-processor.js` is the orchestrator you run. It streams new checklist rows into OpenCode sessions while persisting checkpoints.
-
-- **Finite mode** – stop when all rows in `SUT-CHECKLIST.md` are ✅.
-- **Infinite mode** – whenever the number of unfinished rows dips below the batch size, the processor invokes the backlog synthesis agent (feeding it `SUT-PACKET.md` + the existing checklist) to append enough tier-matched rows to restore a full batch.
-
-### Tier-Level Reports (Automatic)
-
-- After every batch, the processor checks whether an entire tier has reached ✅ status. When it has, `generateTierReportsIfNeeded` stitches together the individual run reports stored under `runs/<tier>/<ID>/` and writes an aggregated summary to `runs/<tier>/<tier>-FINAL-REPORT.md`.
-- The template for these summaries lives in `agent-resources/prompts/TIER_REPORT_PROMPT.md`. Customize that file if you want different output, but no manual invocation is required—the aggregation happens automatically as soon as a tier finishes.
-
-Helpful flags:
-
-```
-node scripts/checklist-processor.js --dry-run
-node scripts/checklist-processor.js --batch-size 3
-node scripts/checklist-processor.js --max-iterations 30
-node scripts/checklist-processor.js --runtime claude-code
-node scripts/checklist-processor.js --model claude-4.5-sonnet
-node scripts/checklist-processor.js --resume
-node scripts/checklist-processor.js status
-```
-
-State is persisted under `.checklist-processor/`. Always version-control `mission-checklist.md` (or your chosen checklist) to audit automated edits.
+- Trigger: Entire tier reaches ✅.
+- Prompt: `agent-resources/prompts/TIER_REPORT_PROMPT.md`.
+- Output: `runs/<sanitized-tier>/<sanitized-tier>-FINAL-REPORT.md`.
+- Sections: Executive summary, key findings table, risks/gaps, evidence, next steps.
 
 ---
 
-## Design Principles
+## Observability & State
 
-1. **Lean** – Focus on high-signal experiments and automation.
-2. **Portable** – Avoid assumptions about the underlying SUT.
-3. **Observable** – Every run should emit actionable telemetry.
-4. **Actionable** – Findings must map to concrete recommendations.
+- **RunManager** stores session metadata in `.processor/active-runs.json` + `session-*.json` files.
+- **Agent logs** are written to `runs/<tier>/<item>/results/agent-*.log`.
+- **Synthesis logs** (optional) land in `.processor/synthesis/synthesis-*.log`.
+- Use `python -m processor.cli status --verbose` to inspect active sessions.
+
+---
+
+## Development & Testing
+
+- Run the full suite: `pytest processor/tests -v`
+- Use `--dry-run` when iterating on prompts or checklist parsing.
+- Inspect `runs/` artifacts to verify final reports and logs.
 
 ---
 
 ## Contributing Workflow
 
-1. Update `SUT-PACKET.md`, `config/run_config.json`, and `SUT-CHECKLIST.md` to describe the new SUT.
-2. Open secrets/credential PRs or ops requests needed for the agent to reach the SUT.
-3. Run `scripts/checklist-processor.js` (finite or infinite) and let it loop.
-4. Commit artifacts + findings.
-5. Submit a PR summarizing changes + notable findings.
+1. Update `SUT-PACKET.md`, `SUT-CHECKLIST.md`, and `config/run_config.json` for the target SUT.
+2. Verify OpenCode/Claude binaries run non-interactively.
+3. Create a virtualenv and install `processor/requirements.txt`.
+4. Exercise the CLI (finite + infinite). Capture logs and tier reports as needed.
+5. Run `pytest`.
+6. Commit artifacts + findings, then open a PR summarizing results.
 
-If you fork this lab for a product, keep the loop structure intact—only swap the inputs.
+Keep the loop structure intact; swap in your own packets/checklists/builders as needed.
+
+---
+
+## Design Principles
+
+1. **Fail Fast** – strict validation of prompts, checklist edits, and agent exit codes.
+2. **Observable** – structured logging, per-stage telemetry, and durable state files.
+3. **Deterministic** – checklist parser enforces consistent markdown; tier reports only emit when appropriate.
+4. **Extensible** – new stages/runtimes can be plugged in without touching the DAG core.
+
+---
+
+## Need Help?
+
+- Inspect `runs/<tier>/<item>/results/agent-*.log` for raw subprocess output.
+- Tail Stageflow logs with `python -m processor.cli run … --verbose`.
+- Customize prompts in `agent-resources/prompts/` to change agent behavior.
+
+Happy automating! 🚀
