@@ -188,7 +188,7 @@ async def run_processor(args) -> int:
 def show_status(args) -> int:
     """Show current processor status."""
     repo_root = get_repo_root(args)
-    state_dir = repo_root / ".checklist-processor"
+    state_dir = repo_root / ".processor"
     
     if not state_dir.exists():
         print("No processor state found. Run 'stageflow-processor run' first.")
@@ -273,7 +273,7 @@ def show_dashboard(args) -> int:
         print(f"  {tier}: {stats['completed']}/{stats['total']} complete, {stats['failed']} failed, {stats['remaining']} remaining")
     
     # Show session info if available
-    state_dir = repo_root / ".checklist-processor"
+    state_dir = repo_root / ".processor"
     state_file = state_dir / "active-runs.json"
     if state_file.exists():
         import json
@@ -289,7 +289,7 @@ def show_dashboard(args) -> int:
 def show_history(args) -> int:
     """Show session history."""
     repo_root = get_repo_root(args)
-    state_dir = repo_root / ".checklist-processor"
+    state_dir = repo_root / ".processor"
     
     sessions = RunManager.get_session_history(state_dir)
     

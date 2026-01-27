@@ -148,7 +148,7 @@ class ProcessorConfig:
                 self.runs_dir = self.repo_root / self.runs_dir
         
         if self.state_dir is None:
-            self.state_dir = self.repo_root / ".checklist-processor"
+            self.state_dir = self.repo_root / ".processor"
         else:
             self.state_dir = Path(self.state_dir)
             if not self.state_dir.is_absolute():
