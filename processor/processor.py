@@ -254,16 +254,45 @@ class ChecklistProcessor:
             
             # Check results
             update_result = results.get("update_status")
+            
+            # Check if run_agent returned retry (e.g., timeout with checkpoint)
+            run_agent_result = results.get("run_agent")
+            if run_agent_result and run_agent_result.status == StageStatus.RETRY:
+                retry_data = run_agent_result.data or {}
+                if retry_data.get("retryable") and run.attempt < run.max_attempts:
+                    run.increment_attempt()
+                    logger.info(f"{item.id} timed out, will retry (attempt {run.attempt}/{run.max_attempts})", 
+                               extra={"checkpoint": retry_data.get("has_checkpoint")})
+                    return {"success": False, "run": run, "error": "timeout_retry", 
+                            "retry": True, "checkpoint": retry_data.get("has_checkpoint")}
+            
+            # Check if overall pipeline succeeded
             if update_result and update_result.status == StageStatus.OK:
                 run.set_status(AgentStatus.COMPLETED)
                 logger.info(f"Completed {item.id}", extra={"duration_ms": run.get_duration_ms()})
                 return {"success": True, "run": run}
             else:
+                # Pipeline failed
                 run.set_status(AgentStatus.FAILED, "Pipeline did not complete successfully")
                 return {"success": False, "run": run, "error": "Pipeline failed"}
                 
         except Exception as e:
-            logger.error(f"Failed {item.id}: {e}", extra={"error_type": type(e).__name__})
+            # Check if this is a retryable timeout (run_agent returned retry but later stage failed)
+            error_msg = str(e).lower()
+            error_type = type(e).__name__
+            # Check for timeout indicators in error message or type
+            is_timeout_error = (
+                "timeout" in error_msg or 
+                "checkpoint" in error_msg or
+                error_type == "UnifiedStageExecutionError" and "without completion marker" in error_msg
+            )
+            if is_timeout_error and run.attempt < run.max_attempts:
+                run.increment_attempt()
+                logger.info(f"{item.id} timed out (via exception), will retry (attempt {run.attempt}/{run.max_attempts})")
+                return {"success": False, "run": run, "error": "timeout_retry", 
+                        "retry": True, "checkpoint": True}
+            
+            logger.error(f"Failed {item.id}: {e}", extra={"error_type": error_type})
             run.set_status(AgentStatus.FAILED, str(e))
             
             # Update status to failed
@@ -335,8 +364,10 @@ class ChecklistProcessor:
                 # Summarize batch results
                 batch_completed = 0
                 batch_failed = 0
+                retry_items = []  # Items to retry in next iteration
 
-                for result in results:
+                for i, result in enumerate(results):
+                    item = batch[i]
                     if isinstance(result, Exception):
                         batch_failed += 1
                         logger.error(f"Item processing raised exception: {result}")
@@ -344,6 +375,10 @@ class ChecklistProcessor:
                         all_runs.append(result.get("run"))
                         if result.get("success"):
                             batch_completed += 1
+                        elif result.get("retry"):
+                            # Item should be retried (e.g., timeout with checkpoint)
+                            retry_items.append(item)
+                            logger.info(f"{item.id} will be retried (attempt {result.get('run', {}).attempt if result.get('run') else 'unknown'})")
                         else:
                             batch_failed += 1
 
@@ -351,7 +386,20 @@ class ChecklistProcessor:
                 total_completed += batch_completed
                 total_failed += batch_failed
 
-                logger.info(f"Batch {iteration} complete: {batch_completed} completed, {batch_failed} failed")
+                logger.info(f"Batch {iteration} complete: {batch_completed} completed, {batch_failed} failed, {len(retry_items)} to retry")
+
+                # Re-queue retry items for next iteration
+                if retry_items:
+                    # Mark old runs as failed before retrying
+                    for item in retry_items:
+                        # Find the old run and mark it as failed
+                        old_run = self.run_manager.get_run(item.id)
+                        if old_run and old_run.status == AgentStatus.RUNNING:
+                            old_run.set_status(AgentStatus.FAILED, "Superseded by retry")
+                    
+                    # Add retry items to the beginning of remaining for next iteration
+                    remaining = retry_items + [item for item in remaining if item not in batch and item not in retry_items]
+                    logger.info(f"Re-queued {len(retry_items)} items for retry")
 
                 # Generate tier reports after each batch
                 items = self.parser.parse()  # Reload to get updated statuses

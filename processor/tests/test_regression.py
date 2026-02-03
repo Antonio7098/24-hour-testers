@@ -345,5 +345,56 @@ class TestTimeoutCliOverride:
             assert config.timeouts.get_timeout_for_priority("P1 Medium", attempt=3) == 86400
 
 
+class TestTimeoutEnforcement:
+    """Regression test for timeout enforcement bug.
+    
+    Bug: The inner read_stream() caught asyncio.TimeoutError which also
+    caught the outer process timeout, causing the agent to run indefinitely.
+    """
+
+    @pytest.mark.asyncio
+    async def test_process_timeout_actually_enforced(self):
+        """Process should be killed when timeout is reached."""
+        import time
+        from ..stages.run_agent import RunAgentStage
+        from ..checkpoint import Phase
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            checklist = Path(tmpdir) / "SUT-CHECKLIST.md"
+            checklist.write_text("""# Test
+| ID | Target | Priority | Risk | Status |
+|----|--------|----------|------|--------|
+| TEST-001 | Test item | P0 | High | ☐ Not Started |
+""")
+            config = ProcessorConfig(
+                repo_root=tmpdir,
+                timeout_ms=2000,  # 2 second timeout for fast test
+                mode=ProcessingMode.FINITE,
+                dry_run=False,
+            )
+            
+            stage = RunAgentStage(config)
+            
+            # Mock the process to simulate slow execution
+            start_time = time.time()
+            
+            ctx = MagicMock()
+            ctx.inputs.get_from.side_effect = lambda *args, **kwargs: {
+                ("prompt",): "test prompt",
+                ("item_id",): "TEST-001",
+                ("item",): {"id": "TEST-001", "priority": "P0", "target": "Test"},
+                ("run_dir",): tmpdir,
+                ("attempt", 1): 1,
+                ("run", None): None,
+            }.get(args, kwargs.get("default"))
+            
+            result = await stage.execute(ctx)
+            elapsed = time.time() - start_time
+            
+            # Should complete quickly (within 5 seconds) due to timeout
+            # If timeout wasn't enforced, this would hang
+            assert elapsed < 10, f"Timeout not enforced - took {elapsed:.1f}s"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

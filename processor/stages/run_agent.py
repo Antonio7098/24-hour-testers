@@ -251,17 +251,28 @@ class RunAgentStage:
             async def read_stream(stream, is_stderr=False):
                 """Read from stream and update monitor."""
                 while True:
+                    # Check if overall timeout has been exceeded
+                    elapsed = time.time() - start_time
+                    if elapsed > timeout_sec:
+                        # Timeout exceeded - exit loop
+                        break
+                    
                     try:
+                        # Use a shorter timeout to allow frequent checks
+                        read_timeout = min(10.0, timeout_sec - elapsed + 1)
+                        if read_timeout <= 0:
+                            break
+                            
                         chunk = await asyncio.wait_for(
                             stream.read(4096),
-                            timeout=10.0  # Read timeout for responsiveness
+                            timeout=read_timeout
                         )
                         if not chunk:
                             break
                         monitor.on_output(chunk, ctx)
                         output_chunks.append(chunk)
                     except asyncio.TimeoutError:
-                        # No data available, check if process is still running
+                        # Inner read timeout - check if process is still running
                         if process.returncode is not None:
                             break
                         # Check for warnings during read timeout
@@ -274,18 +285,37 @@ class RunAgentStage:
                     except Exception:
                         break
 
-            # Create tasks for reading both streams
+            # Create tasks for reading both streams with watchdog timeout
+            stdout_task = asyncio.create_task(read_stream(process.stdout))
+            stderr_task = asyncio.create_task(read_stream(process.stderr, is_stderr=True))
+            
+            timed_out = False
             try:
-                await asyncio.wait_for(
-                    asyncio.gather(
-                        read_stream(process.stdout),
-                        read_stream(process.stderr, is_stderr=True),
-                    ),
+                # Use asyncio.wait with timeout for proper cancellation
+                done, pending = await asyncio.wait(
+                    [stdout_task, stderr_task],
                     timeout=timeout_sec,
+                    return_when=asyncio.ALL_COMPLETED
                 )
-                await process.wait()
+                
+                # Cancel any pending tasks (shouldn't happen unless timeout)
+                for task in pending:
+                    task.cancel()
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+                
+                # Check if tasks completed or timed out
+                if stdout_task in done and stderr_task in done:
+                    # Both completed - check exit code
+                    await process.wait()
+                else:
+                    # Timeout occurred
+                    raise asyncio.TimeoutError()
+                    
             except asyncio.TimeoutError:
-                # Timeout - save checkpoint and return retry
+                timed_out = True
                 elapsed = time.time() - start_time
 
                 if checkpoint and self._checkpoint_manager and run_dir_path:

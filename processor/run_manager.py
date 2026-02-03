@@ -143,15 +143,25 @@ class RunManager:
     def get_summary(self) -> SessionSummary:
         """Get session summary."""
         runs = list(self._runs.values())
+        
+        # Only count the latest run per item for accurate active/completed counts
+        latest_per_item = {}
+        for r in runs:
+            item_id = r.item_id
+            if item_id not in latest_per_item or r.started_at > latest_per_item[item_id].started_at:
+                latest_per_item[item_id] = r
+        
+        latest_runs = list(latest_per_item.values())
+        
         return SessionSummary(
             session_id=self.session_id,
             status=self.status,
-            total=len(runs),
-            pending=len([r for r in runs if r.status == AgentStatus.PENDING]),
-            active=len([r for r in runs if r.is_active()]),
-            completed=len([r for r in runs if r.status == AgentStatus.COMPLETED]),
-            failed=len([r for r in runs if r.status == AgentStatus.FAILED]),
-            timeout=len([r for r in runs if r.status == AgentStatus.TIMEOUT]),
+            total=len(latest_runs),
+            pending=len([r for r in latest_runs if r.status == AgentStatus.PENDING]),
+            active=len([r for r in latest_runs if r.is_active()]),
+            completed=len([r for r in latest_runs if r.status == AgentStatus.COMPLETED]),
+            failed=len([r for r in latest_runs if r.status == AgentStatus.FAILED]),
+            timeout=len([r for r in latest_runs if r.status == AgentStatus.TIMEOUT]),
         )
     
     def get_status_display(self) -> str:
