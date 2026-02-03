@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "24h-testers"
+version = "0.3.0"
+description = "Autonomous checklist-based testing framework for continuous reliability testing"
+readme = "README.md"
+license = {text = "ISC"}
+authors = [
+    {name = "Antonio", email = "antonio@example.com"}
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: ISC License (ISCL)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
+keywords = ["testing", "automation", "reliability", "agents", "checklist"]
+dependencies = [
+    "stageflow-core>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.scripts]
+24h-testers = "processor.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Antonio7098/24-hour-testers"
+Repository = "https://github.com/Antonio7098/24-hour-testers.git"
+Issues = "https://github.com/Antonio7098/24-hour-testers/issues"
+
+[tool.setuptools]
+packages = ["processor", "processor.stages", "processor.interceptors", "processor.utils"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.json", "*.template"]
+
+# Include agent-resources as package data
+[tool.setuptools.data-files]
+"agent-resources/prompts" = [
+    "agent-resources/prompts/AGENT_SYSTEM_PROMPT.md",
+    "agent-resources/prompts/INFINITE_BACKLOG_PROMPT.md",
+    "agent-resources/prompts/TIER_REPORT_PROMPT.md",
+]
+"agent-resources/templates" = [
+    "agent-resources/templates/FINAL_REPORT_TEMPLATE.md",
+    "agent-resources/templates/FOLDER_STRUCTURE.md",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["processor/tests"]

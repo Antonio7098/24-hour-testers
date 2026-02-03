@@ -7,6 +7,36 @@ import shutil
 from pathlib import Path
 
 
+def normalize_path(path: str | Path) -> str:
+    """Normalize a path for consistent comparison.
+
+    Applies expanduser() and resolve() to handle:
+    - ~ expansion
+    - Symlink resolution
+    - Relative path resolution
+    - Case normalization (on case-insensitive systems)
+
+    Returns the normalized path as a string, or the original if normalization fails.
+    """
+    try:
+        return str(Path(path).expanduser().resolve())
+    except Exception:
+        return str(path)
+
+
+def paths_equal(path1: str | Path, path2: str | Path) -> bool:
+    """Compare two paths for equality after normalization.
+
+    Handles:
+    - Different path separators
+    - Trailing slashes
+    - Symlinks
+    - ~ expansion
+    - Relative vs absolute paths
+    """
+    return normalize_path(path1) == normalize_path(path2)
+
+
 def resolve_executable(command: str) -> str:
     """Resolve an executable command name to an absolute path.
 

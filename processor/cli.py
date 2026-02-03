@@ -114,6 +114,12 @@ Examples:
         default=None,
         help="Repository root directory (default: current directory)",
     )
+    run_parser.add_argument(
+        "--agent-resources",
+        type=str,
+        default=None,
+        help="Custom agent-resources directory (prompts/templates override)",
+    )
     
     # Status command
     subparsers.add_parser("status", help="Show processor status")
@@ -147,11 +153,12 @@ def get_repo_root(args) -> Path:
 async def run_processor(args) -> int:
     """Run the processor with the given arguments."""
     repo_root = get_repo_root(args)
-    
+
     config = ProcessorConfig(
         repo_root=repo_root,
         checklist_path=Path(args.checklist) if args.checklist else None,
         mission_brief_path=Path(args.mission_brief) if args.mission_brief else None,
+        agent_resources_dir=Path(args.agent_resources) if args.agent_resources else None,
         batch_size=args.batch_size,
         max_iterations=args.max_iterations,
         mode=ProcessingMode(args.mode),

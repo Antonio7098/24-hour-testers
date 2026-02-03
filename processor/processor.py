@@ -104,11 +104,15 @@ class ChecklistProcessor:
         
         self.run_agent_stage = RunAgentStage(config=self.config)
         
-        self.validate_stage = ValidateOutputStage(require_completion_marker=True)
+        self.validate_stage = ValidateOutputStage(
+            require_completion_marker=True,
+            require_final_report=True,  # Strict: must have FINAL_REPORT.md
+        )
         
         self.update_status_stage = UpdateStatusStage(parser=self.parser)
         
-        tier_report_path = self.config.repo_root / "agent-resources" / "prompts" / "TIER_REPORT_PROMPT.md"
+        # Use agent_resources_dir from config (supports override)
+        tier_report_path = self.config.agent_resources_dir / "prompts" / "TIER_REPORT_PROMPT.md"
         self.generate_report_stage = GenerateTierReportStage(
             parser=self.parser,
             runs_dir=self.config.runs_dir,
@@ -116,9 +120,9 @@ class ChecklistProcessor:
             tier_report_template_path=tier_report_path if tier_report_path.exists() else None,
             config=self.config,
         )
-        
-        # Load backlog synthesis prompt template
-        self._backlog_prompt_path = self.config.repo_root / "agent-resources" / "prompts" / "INFINITE_BACKLOG_PROMPT.md"
+
+        # Load backlog synthesis prompt template from agent_resources_dir
+        self._backlog_prompt_path = self.config.agent_resources_dir / "prompts" / "INFINITE_BACKLOG_PROMPT.md"
         self._backlog_prompt_cache: str | None = None
     
     def _init_interceptors(self) -> None:
@@ -185,7 +189,8 @@ class ChecklistProcessor:
     
     def _setup_run_directory(self, run_dir: Path) -> None:
         """Create run directory structure."""
-        subdirs = ["config", "dx_evaluation", "mocks", "pipelines", "research", "results", "tests"]
+        # Generalized folder structure (removed "pipelines")
+        subdirs = ["config", "dx_evaluation", "mocks", "research", "results", "tests", "artifacts"]
         run_dir.mkdir(parents=True, exist_ok=True)
         for subdir in subdirs:
             (run_dir / subdir).mkdir(exist_ok=True)
@@ -272,81 +277,104 @@ class ChecklistProcessor:
     async def process(self) -> ProcessingResult:
         """
         Main entry point - process checklist items.
-        
+
+        Loops through batches until all items are complete or max_iterations reached.
         Returns ProcessingResult with counts and run details.
         """
         self.run_manager.start()
         mission_brief = self._load_mission_brief()
-        
+
+        # Aggregate totals across all iterations
+        total_processed = 0
+        total_completed = 0
+        total_failed = 0
+        all_runs = []
+
         try:
-            # Parse checklist
-            items = self.parser.parse()
-            prefix_tier_map = self.parser.build_prefix_tier_map(items)
-            remaining = self.parser.get_remaining(items)
-            
-            # Handle infinite mode - extend checklist if needed
-            if self.config.mode == ProcessingMode.INFINITE:
-                synthesized = await self._extend_checklist_if_needed(mission_brief)
-                if synthesized:
-                    # Re-parse after synthesis
-                    items = self.parser.parse()
-                    prefix_tier_map = self.parser.build_prefix_tier_map(items)
-                    remaining = self.parser.get_remaining(items)
-            
-            if not remaining:
-                logger.info("All checklist items are complete. Nothing to process.")
+            iteration = 0
+
+            while iteration < self.config.max_iterations and not self._cancelled:
+                iteration += 1
+                logger.info(f"Starting iteration {iteration}/{self.config.max_iterations}")
+
+                # Parse checklist (re-parse each iteration to get updated statuses)
+                items = self.parser.parse()
+                prefix_tier_map = self.parser.build_prefix_tier_map(items)
+                remaining = self.parser.get_remaining(items)
+
+                # Handle infinite mode - extend checklist if needed
+                if self.config.mode == ProcessingMode.INFINITE:
+                    synthesized = await self._extend_checklist_if_needed(mission_brief)
+                    if synthesized:
+                        # Re-parse after synthesis
+                        items = self.parser.parse()
+                        prefix_tier_map = self.parser.build_prefix_tier_map(items)
+                        remaining = self.parser.get_remaining(items)
+
+                if not remaining:
+                    logger.info("All checklist items are complete. Nothing more to process.")
+                    break
+
+                # Select batch
+                batch = remaining[:self.config.batch_size]
+                logger.info(f"Processing batch of {len(batch)} items (iteration {iteration})",
+                           extra={"items": [i.id for i in batch]})
+
+                if self.config.dry_run:
+                    logger.info(f"[DRY RUN] Would process: {[i.id for i in batch]}")
+                    total_processed += len(batch)
+                    continue
+
+                # Process items in parallel
+                tasks = [
+                    self._process_item(item, prefix_tier_map, mission_brief)
+                    for item in batch
+                ]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # Summarize batch results
+                batch_completed = 0
+                batch_failed = 0
+
+                for result in results:
+                    if isinstance(result, Exception):
+                        batch_failed += 1
+                        logger.error(f"Item processing raised exception: {result}")
+                    elif isinstance(result, dict):
+                        all_runs.append(result.get("run"))
+                        if result.get("success"):
+                            batch_completed += 1
+                        else:
+                            batch_failed += 1
+
+                total_processed += len(results)
+                total_completed += batch_completed
+                total_failed += batch_failed
+
+                logger.info(f"Batch {iteration} complete: {batch_completed} completed, {batch_failed} failed")
+
+                # Generate tier reports after each batch
+                items = self.parser.parse()  # Reload to get updated statuses
                 await self._generate_tier_reports(items, mission_brief)
-                self.run_manager.complete()
-                return ProcessingResult(processed=0, completed=0, failed=0)
-            
-            # Select batch
-            batch = remaining[:self.config.batch_size]
-            logger.info(f"Processing batch of {len(batch)} items", extra={"items": [i.id for i in batch]})
-            
-            if self.config.dry_run:
-                logger.info(f"[DRY RUN] Would process: {[i.id for i in batch]}")
-                self.run_manager.complete()
-                return ProcessingResult(processed=len(batch), completed=0, failed=0, dry_run=True)
-            
-            # Process items in parallel
-            tasks = [
-                self._process_item(item, prefix_tier_map, mission_brief)
-                for item in batch
-            ]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Summarize results
-            completed = 0
-            failed = 0
-            runs = []
-            
-            for result in results:
-                if isinstance(result, Exception):
-                    failed += 1
-                    logger.error(f"Item processing raised exception: {result}")
-                elif isinstance(result, dict):
-                    runs.append(result.get("run"))
-                    if result.get("success"):
-                        completed += 1
-                    else:
-                        failed += 1
-            
+
+            if self._cancelled:
+                logger.info("Processing cancelled by user")
+            elif iteration >= self.config.max_iterations:
+                logger.warning(f"Reached max iterations ({self.config.max_iterations})")
+
             summary = ProcessingResult(
-                processed=len(results),
-                completed=completed,
-                failed=failed,
-                runs=runs,
+                processed=total_processed,
+                completed=total_completed,
+                failed=total_failed,
+                runs=all_runs,
+                dry_run=self.config.dry_run,
             )
-            
-            logger.info(f"Batch complete", extra=summary.to_dict())
+
+            logger.info(f"Processing complete", extra=summary.to_dict())
             self.run_manager.complete()
-            
-            # Generate tier reports
-            items = self.parser.parse()  # Reload to get updated statuses
-            await self._generate_tier_reports(items, mission_brief)
-            
+
             return summary
-            
+
         except Exception as e:
             logger.fatal(f"Processing failed: {e}")
             self.run_manager.fail(e)

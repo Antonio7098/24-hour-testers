@@ -1,0 +1,114 @@
+## CHANGES APPLIED (v0.2.0)
+
+### Bug Fixes Applied
+
+1. **No Loop Bug - FIXED** (processor.py)
+   - Problem: process() method only processed one batch and returned
+   - Fix: Added outer loop that continues processing batches until:
+     - All checklist items are complete
+     - max_iterations is reached
+     - Cancellation is requested
+   - Now generates tier reports after EACH batch
+
+2. **Stricter Validation - FIXED** (stages/validate_output.py)
+   - Problem: Validation passed agents with just completion marker, no FINAL_REPORT.md
+   - Fix: Now requires FINAL_REPORT.md explicitly
+   - Added require_final_report=True parameter
+   - If report exists but no completion marker, still passes (report is primary deliverable)
+
+3. **Path Normalization - FIXED** (utils/process_utils.py, stages/run_agent.py)
+   - Added normalize_path() and paths_equal() utilities
+   - Uses Path.expanduser().resolve() for consistent path comparison
+   - Handles ~, symlinks, relative paths
+
+4. **Folder Structure Generalized** (processor.py)
+   - Removed "pipelines" from subdirs
+   - Added "artifacts" folder instead
+   - New structure: config, dx_evaluation, mocks, research, results, tests, artifacts
+
+### Package Structure (v0.2.0)
+
+- Added pyproject.toml for proper package installation
+- Added agent_resources_dir config option for custom prompts/templates
+- CLI now supports --agent-resources flag for override
+- Can be installed with: pip install -e .
+
+### Usage with Custom Agent Resources
+
+```python
+from processor import ChecklistProcessor, ProcessorConfig
+
+config = ProcessorConfig(
+    repo_root="/path/to/project",
+    agent_resources_dir="/path/to/custom/agent-resources",  # Override!
+)
+processor = ChecklistProcessor(config)
+```
+
+Or via CLI:
+```bash
+24h-testers run --agent-resources ./custom-agent-resources
+```
+
+---
+
+## Robustness Improvements (v0.3.0)
+
+### 1. Phase-Based Checkpoints with Resume
+- **CheckpointManager** saves state after each major phase
+- Phases: INIT → RESEARCH → TESTS → EXECUTION → REPORT → COMPLETE
+- On timeout, checkpoint is saved with detected phase
+- On retry, agent receives resume instructions to skip completed phases
+- Checkpoint stored as `.checkpoint.json` in run directory
+
+### 2. Dynamic Timeout Scaling
+- **TimeoutConfig** class with priority-based timeouts:
+  - P0 Critical: 15 minutes
+  - P1 High: 12 minutes
+  - P1 Medium/Low: 10 minutes
+  - Default: 10 minutes
+- **Retry multiplier**: Each retry attempt gets 20% more time
+
+### 3. Progressive Retry Strategy
+- **RetryConfig** with 3 max retries (up from 2):
+  - Attempt 1: Full run
+  - Attempt 2: Resume from checkpoint + 20% more time
+  - Attempt 3: Simplified mode option + 44% more time
+- `use_checkpoint_on_retry=True` by default
+
+### 4. Real-Time Output Capture
+- **OutputMonitor** class streams output to log file in real-time
+- Chunks written immediately (no buffering until completion)
+- Total bytes tracked for debugging
+
+### 5. Early Warning System
+- **No output warning**: Alerts if no output for 2+ minutes
+- **Research phase warning**: Alerts if research takes >3 minutes
+- Events emitted: `agent.warning` with duration info
+- Phase detection from output keywords (research, test, execut)
+
+### Configuration Example:
+```python
+config = ProcessorConfig(
+    repo_root="/path/to/project",
+    enable_checkpoints=True,  # Default
+    timeouts=TimeoutConfig(
+        p0_critical_ms=900000,  # 15 min
+        p1_high_ms=720000,      # 12 min
+        retry_multiplier=1.2,   # 20% more time on retry
+    ),
+    retry=RetryConfig(
+        max_retries=3,
+        use_checkpoint_on_retry=True,
+    ),
+)
+```
+
+---
+
+## REMAINING TODO
+
+- [ ] CLI command to view agent output live
+- [ ] Multi-agent status dashboard with live updates
+- [ ] Research opencode/claude-code log capture methods
+
