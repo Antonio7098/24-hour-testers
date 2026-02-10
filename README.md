@@ -35,7 +35,7 @@ State persists under `.processor/`; per-item artifacts live in `runs/<tier>/<ite
 |--------------|---------|
 | `SUT-PACKET.md` | Narrative mission brief (architecture, risks, endpoints, personas, SLAs). |
 | `SUT-CHECKLIST.md` | Canonical backlog grouped by tiers. The processor edits this file in place. |
-| `config/run_config.json` | Machine-parsable knobs used by prompts (SUT name, credential keys, datasets, success criteria). |
+| `config/run_config.json` | Machine-parsable knobs used by prompts (copy from `config/run_config.json.template` and customize with SUT name, credential keys, datasets, success criteria). |
 | Secrets / `.env` / Vault | Tokens referenced by `run_config.json`. Ensure binaries can read them non-interactively. |
 
 ### 2. Configure Agent Permissions
@@ -191,6 +191,8 @@ Additional tasks:
 ---
 
 ## Required `run_config.json` Fields
+
+> **Note**: Copy `config/run_config.json.template` to `config/run_config.json` and customize before running.
 
 | Field | Description |
 |-------|-------------|
