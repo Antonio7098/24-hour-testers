@@ -148,6 +148,9 @@ class RunManager:
         latest_per_item = {}
         for r in runs:
             item_id = r.item_id
+            # Skip runs with None started_at
+            if r.started_at is None:
+                continue
             if item_id not in latest_per_item or r.started_at > latest_per_item[item_id].started_at:
                 latest_per_item[item_id] = r
         

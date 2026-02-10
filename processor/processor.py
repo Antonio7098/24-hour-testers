@@ -424,7 +424,7 @@ class ChecklistProcessor:
             return summary
 
         except Exception as e:
-            logger.fatal(f"Processing failed: {e}")
+            logger.error(f"Processing failed: {e}")
             self.run_manager.fail(e)
             raise
     
